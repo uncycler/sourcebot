@@ -1,53 +1,26 @@
 'use client';
 
-import { signIn } from "next-auth/react";
-import { useCallback } from "react";
-import { getAuthProviderInfo } from "@/lib/utils";
 import { MagicLinkForm } from "@/app/login/components/magicLinkForm";
 import { CredentialsForm } from "@/app/login/components/credentialsForm";
 import { DividerSet } from "@/app/components/dividerSet";
-import { ProviderButton } from "@/app/components/providerButton";
-import { AuthSecurityNotice } from "@/app/components/authSecurityNotice";
 import Link from "next/link";
 import { useIdentityProviders } from "@/features/auth/useIdentityProviders";
 
 interface AuthMethodSelectorProps {
     callbackUrl?: string;
     context: "login" | "signup";
-    onProviderClick?: (providerId: string) => void;
-    securityNoticeClosable?: boolean;
-    hideSecurityNotice?: boolean;
 }
 
 export const AuthMethodSelector = ({
     callbackUrl,
     context,
-    onProviderClick,
-    securityNoticeClosable = false,
-    hideSecurityNotice = false
 }: AuthMethodSelectorProps) => {
     const providers = useIdentityProviders();
 
-    const onSignInWithOauth = useCallback((provider: string) => {
-        // Call the optional analytics callback first
-        onProviderClick?.(provider);
+    const hasCredentials = providers.some(p => p.type === "credentials");
+    const hasMagicLink = providers.some(p => p.type === "nodemailer");
 
-        signIn(
-            provider,
-            {
-                redirectTo: callbackUrl ?? "/",
-            }
-        );
-    }, [callbackUrl, onProviderClick]);
-
-    // Separate OAuth providers from special auth methods
-    const oauthProviders = providers.filter(p => p.purpose === "sso" &&
-        !["credentials", "nodemailer"].includes(p.type)
-    );
-    const hasCredentials = providers.some(p => p.purpose === "sso" && p.type === "credentials");
-    const hasMagicLink = providers.some(p => p.purpose === "sso" && p.type === "nodemailer");
-
-    if (oauthProviders.length === 0 && !hasCredentials && !hasMagicLink) {
+    if (!hasCredentials && !hasMagicLink) {
         return (
             <div className="flex flex-col items-center justify-center w-full gap-2">
                 <p className="text-center font-medium">No authentication methods available. Please contact your administrator to configure authentication.</p>
@@ -58,27 +31,8 @@ export const AuthMethodSelector = ({
 
     return (
         <>
-            {!hideSecurityNotice && <AuthSecurityNotice closable={securityNoticeClosable} />}
             <DividerSet
                 elements={[
-                    ...(oauthProviders.length > 0 ? [
-                        <div key="oauth-providers" className="w-full space-y-3">
-                            {oauthProviders.map((provider) => {
-                                const providerInfo = getAuthProviderInfo(provider.type);
-                                return (
-                                    <ProviderButton
-                                        key={provider.id}
-                                        name={provider.displayName ?? providerInfo.displayName}
-                                        logo={providerInfo.icon}
-                                        onClick={() => {
-                                            onSignInWithOauth(provider.id);
-                                        }}
-                                        context={context}
-                                    />
-                                );
-                            })}
-                        </div>
-                    ] : []),
                     ...(hasMagicLink ? [
                         <MagicLinkForm key="magic-link" callbackUrl={callbackUrl} context={context} />
                     ] : []),

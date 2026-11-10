@@ -17,7 +17,6 @@ const PREFIXES = [
     "archived:",
     "rev:",
     "content:", "c:",
-    "context:",
     "file:", "f:",
     "fork:",
     "visibility:",

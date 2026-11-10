@@ -1,0 +1,62 @@
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+  HADOLINT_ARGS: "--ignore DL3066"
+  SAST_EXCLUDED_PATHS: "spec, test, tests, tmp, scripts, packages/db/tools, packages/schemas/tools, packages/shared/tools, packages/web/tools, *.test.ts, *.test.tsx"
+
+include:
+  - project: ks/gitlab-common-templates
+    file:
+      - meta/generic_app-template.yml
+      - test/yarn.yml
+
+test:yarn:
+  image: d19f8bbeksglobal.azurecr.io/cache/library/node:24-alpine3.23
+  before_script:
+    # git-daemon provides git-http-backend, used by the backend Git auth tests.
+    - apk add --no-cache git git-daemon
+    - yarn workspaces focus @sourcebot/backend @sourcebot/web @sourcebot/shared @sourcebot/query-language
+  script:
+    - >-
+      yarn workspaces foreach --all --topological
+      --exclude 'root-workspace-*'
+      run test --reporter=default --reporter=junit --outputFile=junit.xml
+      --coverage.enabled --coverage.provider=v8
+      --coverage.reporter=text-summary --coverage.reporter=json-summary --coverage.reporter=cobertura
+    - |
+      # Each workspace prints its own summary; GitLab only keeps the last regex match,
+      # so print a single line-coverage total across all workspaces.
+      node -e '
+        const fs = require("fs");
+        let covered = 0;
+        let total = 0;
+        for (const pkg of fs.readdirSync("packages")) {
+          const file = `packages/${pkg}/coverage/coverage-summary.json`;
+          if (!fs.existsSync(file)) {
+            continue;
+          }
+          const { lines } = JSON.parse(fs.readFileSync(file, "utf8")).total;
+          covered += lines.covered;
+          total += lines.total;
+          console.log(`${pkg}: ${lines.covered}/${lines.total} lines (${lines.pct}%)`);
+        }
+        const pct = total > 0 ? (100 * covered) / total : 0;
+        console.log(`TOTAL ${covered}/${total} lines ${pct.toFixed(2)}%`);
+      '
+  coverage: /^TOTAL .* (\d+(?:\.\d+)?)%$/
+  artifacts:
+    when: always
+    reports:
+      junit: packages/*/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: packages/*/coverage/cobertura-coverage.xml
+  cache:
+    when: always
+    key:
+      files: [yarn.lock]
+    paths: [.yarn/cache]
+
+# Avoid building the upstream vendor/zoekt Dockerfile in this job
+#init:container:
+#  before_script:
+#    - rm -f vendor/zoekt/Dockerfile

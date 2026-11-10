@@ -1,4 +1,6 @@
-import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
+// Must be the first import: extends zod before any schemas are created.
+import './extendZod.js';
+import { ConnectionType } from '@sourcebot/db';
 import z from 'zod';
 import {
     findRelatedSymbolsRequestSchema,
@@ -26,13 +28,6 @@ import {
 import { serviceErrorSchema } from '../lib/serviceError.js';
 import { getVersionResponseSchema, listReposQueryParamsSchema, listReposResponseSchema } from '../lib/schemas.js';
 
-let hasExtendedZod = false;
-
-if (!hasExtendedZod) {
-    extendZodWithOpenApi(z);
-    hasExtendedZod = true;
-}
-
 export const publicServiceErrorSchema = serviceErrorSchema.openapi('PublicApiServiceError', {
     description: 'Structured error response returned by Sourcebot public API endpoints.',
 });
@@ -45,6 +40,11 @@ export const publicFileSourceResponseSchema = fileSourceResponseSchema.openapi('
 export const publicFileBlameRequestSchema = fileBlameRequestSchema.openapi('PublicFileBlameRequest');
 export const publicFileBlameResponseSchema = fileBlameResponseSchema.openapi('PublicFileBlameResponse');
 export const publicVersionResponseSchema = getVersionResponseSchema.openapi('PublicVersionResponse');
+export const publicListConnectionsResponseSchema = z.array(z.object({
+    id: z.number().int(),
+    name: z.string(),
+    connectionType: z.nativeEnum(ConnectionType),
+})).openapi('PublicListConnectionsResponse');
 export const publicListReposQueryParamsSchema = listReposQueryParamsSchema.openapi('PublicListReposQuery');
 export const publicListReposResponseSchema = listReposResponseSchema.openapi('PublicListReposResponse');
 export const publicGetDiffRequestSchema = getDiffRequestSchema.openapi('PublicGetDiffRequest');
@@ -63,45 +63,3 @@ export const publicListCommitAuthorsResponseSchema = z.array(publicCommitAuthorS
 export const publicHealthResponseSchema = z.object({
     status: z.enum(['ok']),
 }).openapi('PublicHealthResponse');
-
-// EE: User Management
-export const publicEeUserSchema = z.object({
-    id: z.string(),
-    name: z.string().nullable(),
-    email: z.string(),
-    role: z.enum(['OWNER', 'MEMBER']),
-    suspendedAt: z.string().datetime().nullable(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-    lastActivityAt: z.string().datetime().nullable(),
-}).openapi('PublicEeUser');
-
-export const publicEeUsersResponseSchema = z.array(publicEeUserSchema).openapi('PublicEeUsersResponse');
-
-export const publicEeDeleteUserResponseSchema = z.object({
-    success: z.boolean(),
-    message: z.string(),
-}).openapi('PublicEeDeleteUserResponse');
-
-// EE: Audit
-export const publicEeAuditQuerySchema = z.object({
-    since: z.string().datetime().optional().describe('Return records at or after this timestamp (ISO 8601).'),
-    until: z.string().datetime().optional().describe('Return records at or before this timestamp (ISO 8601).'),
-    page: z.coerce.number().int().positive().default(1),
-    perPage: z.coerce.number().int().positive().max(100).default(50),
-}).openapi('PublicEeAuditQuery');
-
-export const publicEeAuditRecordSchema = z.object({
-    id: z.string(),
-    timestamp: z.string().datetime(),
-    action: z.string().describe('The audited action (e.g. `user.read`, `user.delete`, `audit.fetch`).'),
-    actorId: z.string(),
-    actorType: z.string(),
-    targetId: z.string(),
-    targetType: z.string(),
-    sourcebotVersion: z.string(),
-    metadata: z.record(z.unknown()).nullable(),
-    orgId: z.number(),
-}).openapi('PublicEeAuditRecord');
-
-export const publicEeAuditResponseSchema = z.array(publicEeAuditRecordSchema).openapi('PublicEeAuditResponse');

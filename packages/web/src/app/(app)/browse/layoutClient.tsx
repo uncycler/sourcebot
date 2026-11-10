@@ -13,12 +13,10 @@ import { Separator } from "@/components/ui/separator";
 
 interface LayoutProps {
     children: React.ReactNode;
-    isSearchAssistSupported: boolean;
 }
 
 export function LayoutClient({
     children,
-    isSearchAssistSupported,
 }: LayoutProps) {
     const { repoName, revisionName, pathType } = useBrowseParams();
     return (
@@ -32,7 +30,6 @@ export function LayoutClient({
                                 query: `repo:^${escapeStringRegexp(repoName)}$${revisionName ? ` rev:${revisionName}` : ''} `,
                             }}
                             className="w-full"
-                            isSearchAssistSupported={isSearchAssistSupported}
                         />
                     </div>
                     <Separator />

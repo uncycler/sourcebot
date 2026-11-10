@@ -57,31 +57,7 @@
                                 "root": "docs/features/search/code-search",
                                 "pages": [
                                     "docs/features/search/syntax-reference",
-                                    "docs/features/search/ai-search-assist",
-                                    "docs/features/search/multi-branch-indexing",
-                                    "docs/features/search/search-contexts"
-                                ]
-                            },
-                            {
-                                "group": "Ask Sourcebot",
-                                "root": "docs/features/ask/ask-sourcebot",
-                                "pages": [
-                                    "docs/features/ask/skills",
-                                    "docs/features/ask/connectors",
-                                    "docs/features/ask/chat-sharing",
-                                    "docs/features/ask/add-model-providers"
-                                ]
-                            },
-                            "docs/features/mcp-server",
-                            "docs/features/code-navigation",
-                            "docs/features/analytics",
-                            "docs/features/permission-syncing",
-                            {
-                                "group": "Agents",
-                                "tag": "experimental",
-                                "root": "docs/features/agents/agents",
-                                "pages": [
-                                    "docs/features/agents/review-agent"
+                                    "docs/features/search/multi-branch-indexing"
                                 ]
                             }
                         ]
@@ -108,30 +84,18 @@
                                     "docs/connections/request-new"
                                 ]
                             },
-                            "docs/configuration/language-model-providers",
-                            "docs/configuration/idp",
                             {
                                 "group": "Authentication",
                                 "root": "docs/configuration/auth/authentication",
                                 "pages": [
                                     "docs/configuration/auth/providers",
-                                    "docs/configuration/auth/scim",
                                     "docs/configuration/auth/access-settings",
                                     "docs/configuration/auth/roles-and-permissions",
                                     "docs/configuration/auth/faq"
                                 ]
                             },
                             "docs/configuration/transactional-emails",
-                            "docs/configuration/structured-logging",
-                            "docs/configuration/audit-logs"
-                        ]
-                    },
-                    {
-                        "group": "Subscribe",
-                        "pages": [
-                            "docs/activating-a-subscription",
-                            "docs/seat-reconciliation",
-                            "docs/free-trial"
+                            "docs/configuration/structured-logging"
                         ]
                     },
                     {
@@ -139,8 +103,6 @@
                         "pages": [
                             "docs/misc/architecture",
                             "docs/misc/scalability",
-                            "docs/misc/telemetry",
-                            "docs/misc/service-ping",
                             "docs/deployment/sizing-guide",
                             {
                                 "group": "Infrastructure",
@@ -149,14 +111,6 @@
                                     "docs/deployment/infrastructure/redis"
                                 ]
                             }
-                        ]
-                    },
-                    {
-                        "group": "Upgrade",
-                        "pages": [
-                            "docs/upgrade/v4-to-v5-guide",
-                            "docs/upgrade/v3-to-v4-guide",
-                            "docs/upgrade/v2-to-v3-guide"
                         ]
                     }
                 ]
@@ -190,6 +144,13 @@
                         ]
                     },
                     {
+                        "group": "Connections",
+                        "icon": "link",
+                        "pages": [
+                            "GET /api/connections"
+                        ]
+                    },
+                    {
                         "group": "Git",
                         "icon": "code-branch",
                         "pages": [
@@ -200,16 +161,6 @@
                             "GET /api/source",
                             "GET /api/blame",
                             "POST /api/tree"
-                        ]
-                    },
-                    {
-                        "group": "Enterprise Management",
-                        "icon": "building-columns",
-                        "pages": [
-                            "GET /api/ee/user",
-                            "DELETE /api/ee/user",
-                            "GET /api/ee/users",
-                            "GET /api/ee/audit"
                         ]
                     },
                     {
@@ -232,7 +183,7 @@
         "primary": {
             "type": "button",
             "label": "Book a Call",
-            "href": "https://calendly.com/michael-sourcebot/sourcebot-call?utm_source=docs"
+            "href": "https://calendly.com/michael-sourcebot/sourcebot-introduction?utm_source=docs"
         }
     },
     "footer": {
@@ -241,11 +192,6 @@
             "twitter": "https://x.com/sourcebot_dev",
             "discord": "https://discord.gg/HDScTs3ptP",
             "linkedin": "https://www.linkedin.com/company/sourcebot"
-        }
-    },
-    "integrations": {
-        "posthog": {
-            "apiKey": "phc_DBGufjG0rkj3OEhuTcZ04xfeZB6eDhO7dP8ZCnqH7K7"
         }
     },
     "appearance": {
@@ -262,28 +208,12 @@
             "destination": "/docs/features/search/code-search"
         },
         {
-            "source": "/docs/features/ask/overview",
-            "destination": "/docs/features/ask/ask-sourcebot"
-        },
-        {
-            "source": "/docs/features/agents/overview",
-            "destination": "/docs/features/agents/agents"
-        },
-        {
             "source": "/docs/connections/overview",
             "destination": "/docs/connections/indexing-your-code"
         },
         {
             "source": "/docs/configuration/auth/overview",
             "destination": "/docs/configuration/auth/authentication"
-        },
-        {
-            "source": "/docs/license-key",
-            "destination": "/docs/activating-a-subscription"
-        },
-        {
-            "source": "/docs/billing",
-            "destination": "/docs/seat-reconciliation"
         }
     ]
 }

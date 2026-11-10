@@ -6,16 +6,12 @@ import { auth } from "@/auth";
 import { WelcomeStep } from "./components/welcomeStep";
 import { OwnerSignupStep } from "./components/ownerSignupStep";
 import { AccessSettingsStep } from "./components/accessSettingsStep";
-import { TrialStep, TrialStepTitle, TrialStepSubtitle } from "./components/trialStep";
-import { AlreadyLicensedStep } from "./components/alreadyLicensedStep";
+import { CompleteStep } from "./components/completeStep";
 import { SINGLE_TENANT_ORG_ID } from "@/lib/constants";
 import { __unsafePrisma } from "@/prisma";
 import { OrgRole } from "@sourcebot/db";
 import { LogoutEscapeHatch } from "@/app/components/logoutEscapeHatch";
 import { redirect } from "next/navigation";
-import { env } from "@sourcebot/shared";
-import { hasEntitlement, isValidLicenseActive } from "@/lib/entitlements";
-import { GcpIapAuth } from "@/app/(app)/components/gcpIapAuth";
 import { activeOrPendingMembershipWhere } from "@/features/membership/utils";
 
 interface OnboardingProps {
@@ -62,17 +58,9 @@ export default async function Onboarding(props: OnboardingProps) {
         }
     }
 
-    // If we're using an IAP bridge we need to sign them in now and then redirect them back to the onboarding page
-    const ssoEntitlement = await hasEntitlement("sso");
-    if (ssoEntitlement && env.AUTH_EE_GCP_IAP_ENABLED && env.AUTH_EE_GCP_IAP_AUDIENCE) {
-        return <GcpIapAuth callbackUrl={`/onboard`} />;
-    }
-
     // Determine current step based on URL parameter and authentication state
     const stepParam = searchParams?.step ? parseInt(searchParams.step) : 0;
     const currentStep = session?.user ? Math.max(2, stepParam) : Math.max(0, Math.min(stepParam, 1));
-
-    const isLicensed = await isValidLicenseActive();
 
     const steps: OnboardingStep[] = [];
 
@@ -126,18 +114,11 @@ export default async function Onboarding(props: OnboardingProps) {
         )
     });
 
-    const finalStepIndex = steps.length;
-    steps.push(isLicensed ? {
+    steps.push({
         id: "complete",
         title: "You're all set",
         subtitle: "Your Sourcebot deployment is ready to go.",
-        component: <AlreadyLicensedStep />,
-    } : {
-        id: "trial",
-        title: "Try Sourcebot Pro",
-        headerTitle: <TrialStepTitle />,
-        subtitle: <TrialStepSubtitle />,
-        component: <TrialStep stepIndex={finalStepIndex} />,
+        component: <CompleteStep />,
     });
 
     const currentStepData = steps[currentStep]

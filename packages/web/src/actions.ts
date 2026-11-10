@@ -1,10 +1,9 @@
 'use server';
 
-import { createAudit } from "@/ee/features/audit/audit";
 import { ErrorCode } from "@/lib/errorCodes";
 import { notFound, ServiceError } from "@/lib/serviceError";
 import { sew } from "@/middleware/sew";
-import { ConnectionSyncJobStatus, OrgRole, Prisma, RepoIndexingJobStatus, RepoIndexingJobType } from "@sourcebot/db";
+import { OrgRole, Prisma } from "@sourcebot/db";
 import { GiteaConnectionConfig } from "@sourcebot/schemas/v3/gitea.type";
 import { GithubConnectionConfig } from "@sourcebot/schemas/v3/github.type";
 import { GitlabConnectionConfig } from "@sourcebot/schemas/v3/gitlab.type";
@@ -12,7 +11,7 @@ import { createLogger, env, generateApiKey, getTokenFromConfig } from "@sourcebo
 import { StatusCodes } from "http-status-codes";
 import { cookies } from "next/headers";
 import { getBrowsePath } from "./app/(app)/browse/hooks/utils";
-import { AGENTIC_SEARCH_TUTORIAL_DISMISSED_COOKIE_NAME, MOBILE_UNSUPPORTED_SPLASH_SCREEN_DISMISSED_COOKIE_NAME } from "./lib/constants";
+import { MOBILE_UNSUPPORTED_SPLASH_SCREEN_DISMISSED_COOKIE_NAME } from "./lib/constants";
 import { RepositoryQuery } from "./lib/types";
 import { withAuth, withOptionalAuth } from "./middleware/withAuth";
 
@@ -52,22 +51,6 @@ export const createApiKey = async (name: string): Promise<{ key: string } | Serv
         });
 
         if (existingApiKey) {
-            await createAudit({
-                action: "api_key.creation_failed",
-                actor: {
-                    id: user.id,
-                    type: "user"
-                },
-                target: {
-                    id: org.id.toString(),
-                    type: "org"
-                },
-                orgId: org.id,
-                metadata: {
-                    message: `API key ${name} already exists`,
-                    api_key: name
-                }
-            });
             return {
                 statusCode: StatusCodes.BAD_REQUEST,
                 errorCode: ErrorCode.API_KEY_ALREADY_EXISTS,
@@ -76,7 +59,7 @@ export const createApiKey = async (name: string): Promise<{ key: string } | Serv
         }
 
         const { key, hash } = generateApiKey();
-        const apiKey = await prisma.apiKey.create({
+        await prisma.apiKey.create({
             data: {
                 name,
                 hash,
@@ -85,18 +68,6 @@ export const createApiKey = async (name: string): Promise<{ key: string } | Serv
             }
         });
 
-        await createAudit({
-            action: "api_key.created",
-            actor: {
-                id: user.id,
-                type: "user"
-            },
-            target: {
-                id: apiKey.hash,
-                type: "api_key"
-            },
-            orgId: org.id
-        });
 
         return {
             key,
@@ -104,7 +75,7 @@ export const createApiKey = async (name: string): Promise<{ key: string } | Serv
     }));
 
 export const deleteApiKey = async (name: string): Promise<{ success: boolean } | ServiceError> => sew(() =>
-    withAuth(async ({ org, user, prisma }) => {
+    withAuth(async ({ user, prisma }) => {
         const apiKey = await prisma.apiKey.findFirst({
             where: {
                 name,
@@ -113,22 +84,6 @@ export const deleteApiKey = async (name: string): Promise<{ success: boolean } |
         });
 
         if (!apiKey) {
-            await createAudit({
-                action: "api_key.deletion_failed",
-                actor: {
-                    id: user.id,
-                    type: "user"
-                },
-                target: {
-                    id: org.id.toString(),
-                    type: "org"
-                },
-                orgId: org.id,
-                metadata: {
-                    message: `API key ${name} not found for user ${user.id}`,
-                    api_key: name
-                }
-            });
             return {
                 statusCode: StatusCodes.NOT_FOUND,
                 errorCode: ErrorCode.API_KEY_NOT_FOUND,
@@ -142,21 +97,6 @@ export const deleteApiKey = async (name: string): Promise<{ success: boolean } |
             },
         });
 
-        await createAudit({
-            action: "api_key.deleted",
-            actor: {
-                id: user.id,
-                type: "user"
-            },
-            target: {
-                id: apiKey.hash,
-                type: "api_key"
-            },
-            orgId: org.id,
-            metadata: {
-                api_key: name
-            }
-        });
 
         return {
             success: true,
@@ -220,96 +160,6 @@ export const getRepos = async ({
         } satisfies RepositoryQuery))
     }));
 
-/**
- * Returns a set of aggregated stats about the repos in the org
- */
-export const getReposStats = async () => sew(() =>
-    withOptionalAuth(async ({ org, prisma }) => {
-        const [
-            // Total number of repos.
-            numberOfRepos,
-            // Number of repos with their first time indexing jobs either
-            // pending or in progress.
-            numberOfReposWithFirstTimeIndexingJobsInProgress,
-            // Number of repos that have been indexed at least once.
-            numberOfReposWithIndex,
-        ] = await Promise.all([
-            prisma.repo.count({
-                where: {
-                    orgId: org.id,
-                }
-            }),
-            prisma.repo.count({
-                where: {
-                    orgId: org.id,
-                    indexedAt: null,
-                    jobs: {
-                        some: {
-                            type: RepoIndexingJobType.INDEX,
-                            status: {
-                                in: [
-                                    RepoIndexingJobStatus.PENDING,
-                                    RepoIndexingJobStatus.IN_PROGRESS,
-                                ]
-                            }
-                        },
-                    },
-                }
-            }),
-            prisma.repo.count({
-                where: {
-                    orgId: org.id,
-                    NOT: {
-                        indexedAt: null,
-                    }
-                }
-            })
-        ]);
-
-        return {
-            numberOfRepos,
-            numberOfReposWithFirstTimeIndexingJobsInProgress,
-            numberOfReposWithIndex,
-        };
-    })
-)
-
-export const getConnectionStats = async () => sew(() =>
-    withAuth(async ({ org, prisma }) => {
-        const [
-            numberOfConnections,
-            numberOfConnectionsWithFirstTimeSyncJobsInProgress,
-        ] = await Promise.all([
-            prisma.connection.count({
-                where: {
-                    orgId: org.id,
-                }
-            }),
-            prisma.connection.count({
-                where: {
-                    orgId: org.id,
-                    syncedAt: null,
-                    syncJobs: {
-                        some: {
-                            status: {
-                                in: [
-                                    ConnectionSyncJobStatus.PENDING,
-                                    ConnectionSyncJobStatus.IN_PROGRESS,
-                                ]
-                            }
-                        }
-                    }
-                }
-            })
-        ]);
-
-        return {
-            numberOfConnections,
-            numberOfConnectionsWithFirstTimeSyncJobsInProgress,
-        };
-    })
-);
-
 export const getRepoInfoByName = async (repoName: string) => sew(() =>
     withOptionalAuth(async ({ org, prisma }) => {
         // @note: repo names are represented by their remote url
@@ -367,25 +217,6 @@ export const getRepoInfoByName = async (repoName: string) => sew(() =>
             imageUrl: repo.imageUrl ?? undefined,
             indexedAt: repo.indexedAt ?? undefined,
         }
-    }));
-
-export const getSearchContexts = async () => sew(() =>
-    withOptionalAuth(async ({ org, prisma }) => {
-        const searchContexts = await prisma.searchContext.findMany({
-            where: {
-                orgId: org.id,
-            },
-            include: {
-                repos: true,
-            },
-        });
-
-        return searchContexts.map((context) => ({
-            id: context.id,
-            name: context.name,
-            description: context.description ?? undefined,
-            repoNames: context.repos.map((repo) => repo.name),
-        }));
     }));
 
 export const getRepoImage = async (repoId: number): Promise<ArrayBuffer | ServiceError> => sew(async () => {
@@ -455,16 +286,6 @@ export const getRepoImage = async (repoId: number): Promise<ArrayBuffer | Servic
             return notFound();
         }
     })
-});
-
-// eslint-disable-next-line authz/require-auth-wrapper -- UI-only preference cookie, no DB access
-export const setAgenticSearchTutorialDismissedCookie = async (dismissed: boolean) => sew(async () => {
-    const cookieStore = await cookies();
-    cookieStore.set(AGENTIC_SEARCH_TUTORIAL_DISMISSED_COOKIE_NAME, dismissed ? "true" : "false", {
-        httpOnly: false, // Allow client-side access
-        maxAge: 365 * 24 * 60 * 60, // 1 year in seconds
-    });
-    return true;
 });
 
 // eslint-disable-next-line authz/require-auth-wrapper -- UI-only preference cookie, no DB access

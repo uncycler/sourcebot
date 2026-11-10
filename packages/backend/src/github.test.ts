@@ -1,10 +1,108 @@
-import { expect, test, describe } from 'vitest';
+import type { GithubConnectionConfig } from "@sourcebot/schemas/v3/github.type";
+import { expect, test, describe, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => {
+    const notFound = Object.assign(new Error("Not Found"), { status: 404 });
+
+    return {
+        reposGet: vi.fn(async () => {
+            throw notFound;
+        }),
+        paginateIterator: vi.fn(() => ({
+            async *[Symbol.asyncIterator]() {
+                throw notFound;
+            },
+        })),
+    };
+});
+
+vi.mock("@octokit/rest", () => ({
+    Octokit: class {
+        repos = {
+            get: mocks.reposGet,
+            listForOrg: vi.fn(),
+        };
+        rest = {
+            search: {
+                repos: vi.fn(),
+            },
+            users: {
+                getAuthenticated: vi.fn(),
+            },
+        };
+        paginate = {
+            iterator: mocks.paginateIterator,
+        };
+    },
+}));
+
+vi.mock("./utils.js", () => ({
+    fetchWithRetry: (routine: () => Promise<unknown>) => routine(),
+    measure: async (routine: () => Promise<unknown>) => ({
+        durationMs: 1,
+        data: await routine(),
+    }),
+}));
+
+import { collectRepositoryDiscoveryIssues } from "./repositoryDiscoveryIssueContext.js";
 import {
     OctokitRepository,
     shouldExcludeRepo,
     detectGitHubTokenType,
     supportsOAuthScopeIntrospection,
+    getGitHubReposFromConfig,
 } from './github';
+
+describe("GitHub repository discovery", () => {
+    test("reports inaccessible configured targets as partial successes", async () => {
+        const config = {
+            type: "github",
+            url: "https://github.example.com",
+            orgs: ["missing-org"],
+            repos: ["missing-owner/missing-repo"],
+            users: ["missing-user"],
+        } satisfies GithubConnectionConfig;
+        const result = await collectRepositoryDiscoveryIssues(() =>
+            getGitHubReposFromConfig(
+                config,
+                new AbortController().signal,
+            )
+        );
+
+        expect(result).toEqual({
+            value: [],
+            issues: [
+                {
+                    code: "NOT_FOUND_OR_INACCESSIBLE",
+                    effect: "TARGET_SKIPPED",
+                    subject: {
+                        kind: "organization",
+                        value: "missing-org",
+                    },
+                    message: "GitHub organization was not found or is inaccessible.",
+                },
+                {
+                    code: "NOT_FOUND_OR_INACCESSIBLE",
+                    effect: "TARGET_SKIPPED",
+                    subject: {
+                        kind: "repository",
+                        value: "missing-owner/missing-repo",
+                    },
+                    message: "GitHub repository was not found or is inaccessible.",
+                },
+                {
+                    code: "NOT_FOUND_OR_INACCESSIBLE",
+                    effect: "TARGET_SKIPPED",
+                    subject: {
+                        kind: "user",
+                        value: "missing-user",
+                    },
+                    message: "GitHub user was not found or is inaccessible.",
+                },
+            ],
+        });
+    });
+});
 
 describe('detectGitHubTokenType', () => {
     test('detects classic PAT (ghp_)', () => {
@@ -101,6 +199,40 @@ test('shouldExcludeRepo handles archived repos correctly', () => {
     expect(shouldExcludeRepo({ repo })).toBe(false);
     expect(shouldExcludeRepo({ repo, exclude: { archived: true } })).toBe(true);
     expect(shouldExcludeRepo({ repo, exclude: { archived: false } })).toBe(false);
+});
+
+test('shouldExcludeRepo handles private repos correctly', () => {
+    const privateRepo = {
+        full_name: 'test/private-repo',
+        clone_url: 'https://github.com/test/private-repo.git',
+        private: true,
+        visibility: 'private',
+    } as OctokitRepository;
+
+    expect(shouldExcludeRepo({ repo: privateRepo })).toBe(false);
+    expect(shouldExcludeRepo({ repo: privateRepo, exclude: { private: true } })).toBe(true);
+    expect(shouldExcludeRepo({ repo: privateRepo, exclude: { private: false } })).toBe(false);
+});
+
+test('shouldExcludeRepo does not exclude internal repos when exclude.private is true', () => {
+    const internalRepo = {
+        full_name: 'test/internal-repo',
+        clone_url: 'https://github.com/test/internal-repo.git',
+        private: true,
+        visibility: 'internal',
+    } as OctokitRepository;
+
+    expect(shouldExcludeRepo({ repo: internalRepo, exclude: { private: true } })).toBe(false);
+});
+
+test('shouldExcludeRepo excludes private repos with missing visibility when exclude.private is true', () => {
+    const repo = {
+        full_name: 'test/private-no-visibility',
+        clone_url: 'https://github.com/test/private-no-visibility.git',
+        private: true,
+    } as OctokitRepository;
+
+    expect(shouldExcludeRepo({ repo, exclude: { private: true } })).toBe(true);
 });
 
 test('shouldExcludeRepo handles include.topics correctly', () => {

@@ -1,6 +1,5 @@
 import { sew } from "@/middleware/sew";
 import { getBrowsePath } from '@/app/(app)/browse/hooks/utils';
-import { createAudit } from '@/ee/features/audit/audit';
 import { parseGitAttributes, resolveLanguageFromGitAttributes } from '@/lib/gitattributes';
 import { detectLanguageFromFilename } from '@/lib/languageDetection';
 import { ServiceError, notFound, fileNotFound, invalidGitRef, unresolvedGitRef, unexpectedError } from '@/lib/serviceError';
@@ -8,8 +7,7 @@ import { getCodeHostBrowseFileAtBranchUrl } from '@/lib/utils';
 import { withOptionalAuth } from '@/middleware/withAuth';
 import { env, getRepoPath } from '@sourcebot/shared';
 import { Org, PrismaClient } from '@sourcebot/db';
-import { headers } from 'next/headers';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import type z from 'zod';
 import { isGitRefValid, isPathValid } from './utils';
 import { fileSourceRequestSchema, fileSourceResponseSchema } from './schemas';
@@ -19,9 +17,8 @@ export type FileSourceRequest = z.infer<typeof fileSourceRequestSchema>;
 export type FileSourceResponse = z.infer<typeof fileSourceResponseSchema>;
 
 /**
- * Fetches file source without an auth layer. Intended for privileged server-side
- * callers (e.g. the review agent webhook handler) that have already been
- * authenticated via their own mechanism and need direct repo access.
+ * Fetches file source without an auth layer. Callers must resolve `org` and
+ * `prisma` from an auth context first (see `getFileSource`).
  */
 export const getFileSourceForRepo = async (
     { path: filePath, repo: repoName, ref }: FileSourceRequest,
@@ -195,17 +192,6 @@ export const getBlobContentForRepo = async (
     }
 });
 
-export const getFileSource = async ({ path: filePath, repo: repoName, ref }: FileSourceRequest, { source }: { source?: string } = {}): Promise<FileSourceResponse | ServiceError> => sew(() => withOptionalAuth(async ({ org, prisma, user }) => {
-    if (user) {
-        const resolvedSource = source ?? (await headers()).get('X-Sourcebot-Client-Source') ?? undefined;
-        await createAudit({
-            action: 'user.fetched_file_source',
-            actor: { id: user.id, type: 'user' },
-            target: { id: org.id.toString(), type: 'org' },
-            orgId: org.id,
-            metadata: { source: resolvedSource },
-        });
-    }
-
+export const getFileSource = async ({ path: filePath, repo: repoName, ref }: FileSourceRequest): Promise<FileSourceResponse | ServiceError> => sew(() => withOptionalAuth(async ({ org, prisma }) => {
     return getFileSourceForRepo({ path: filePath, repo: repoName, ref }, { org, prisma });
 }));

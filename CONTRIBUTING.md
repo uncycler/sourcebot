@@ -1,42 +1,16 @@
-# Contributing to Sourcebot
+# Contributing
 
-So you're interested in contributing to Sourcebot. Great! If you have any questions, don't hesitate to reach out on our [Discord](https://discord.gg/HDScTs3ptP).
+This repository is a fork of [Sourcebot](https://github.com/sourcebot-dev/sourcebot), hosted at [KS/solutions/ide-infra/sourcebot](https://git.kudelski.com/KS/solutions/ide-infra/sourcebot).
 
-## Understanding the Licenses
+## License
 
-First thing to know is that Sourcebot is not a side-project - it is a product of a company based in San Francisco who builds and maintains it professionally. For this reason, Sourcebot follows the [open core](https://en.wikipedia.org/wiki/Open-core_model) business model, which splits the codebase into two parts: **core** and **ee**, which each have their own license:
-
-- **core** code is licensed under the [Functional Source License](https://fsl.software/), a
-mostly permissive non-compete license that converts to Apache 2.0 or MIT after two years. Code shipped in core (without ee) forms the [Sourcebot Community Edition (CE)](https://www.sourcebot.dev/pricing).
-- **ee (enterprise)** code is licensed under the [Sourcebot Enterprise License](ee/license), a commercial license that covers our enterprise offering. Usage of ee code requires a valid license key. Code shipped in core **and** ee forms the [Sourcebot Enterprise Edition (EE)](https://www.sourcebot.dev/pricing).
-
-You can take a look at the root [LICENSE.md](LICENSE.md) for a breakdown of what code is core or ee.
-
-For contributing, the breakdown is as follows:
-
-- **core** : you're free to contribute, but you can't take this and use it to compete with us. You can, however, otherwise use it however you want. Your changes will convert to Apache 2.0 after two years.
-- **ee** : you can also contribute, but Sourcebot retains all rights to your modifications and patches. Your contributions can only be used in production by those with a valid Enterprise license.
-
-## Contributor Policy
-
-We want to make it easy to contribute to Sourcebot. Here are the most common types of changes that get merged:
-- Bug fixes
-- Improvements to our code host integrations
-- Additional LLM providers
-- Documentation improvements
-
-However, any UI or core product feature must go through a design review with the core team before implementation. If you're unsure if your PR would be accepted, ask a maintainer.
-
-> [!NOTE]
-> PRs that ignore these guardrails will likely be closed.
-
-Want to take on an issue? Leave a comment and a maintainer may assign it to you unless it is something we are already working on.
+The code is licensed under the [Functional Source License, Version 1.1, ALv2 Future License](LICENSE.md). The upstream enterprise (`ee`) code has been removed from this fork, so every contribution falls under that license. Third-party components, such as [zoekt](vendor/zoekt), keep their original licenses.
 
 ## Developing Sourcebot
 
-1. Install <a href="https://go.dev/doc/install"><img src="https://go.dev/favicon.ico" width="16" height="16"> go</a>, <a href="https://docs.docker.com/get-started/get-docker/"><img src="https://www.docker.com/favicon.ico" width="16" height="16"> docker</a>, and <a href="https://nodejs.org/"><img src="https://nodejs.org/favicon.ico" width="16" height="16"> NodeJS</a>. Note that a NodeJS version of at least `24` is required.
+1. Install <a href="https://go.dev/doc/install"><img src="https://go.dev/favicon.ico" width="16" height="16"> go</a>, <a href="https://docs.docker.com/get-started/get-docker/"><img src="https://www.docker.com/favicon.ico" width="16" height="16"> docker</a>, and <a href="https://nodejs.org/"><img src="https://nodejs.org/favicon.ico" width="16" height="16"> NodeJS</a>. NodeJS `24` or later is required.
 
-2. Install [universal-ctags](https://github.com/universal-ctags/ctags) v6.1.0 (required by zoekt). Version 6.1.0 is required — newer versions have a known incompatibility with zoekt.
+2. Install [universal-ctags](https://github.com/universal-ctags/ctags) v6.1.0 (required by zoekt). Newer versions have a known incompatibility with zoekt.
 
     **macOS:** Run the provided install script:
     ```sh
@@ -62,11 +36,12 @@ Want to take on an issue? Leave a comment and a maintainer may assign it to you 
     yarn --version
     ```
 
-3. Clone the repository with submodules:
+4. Clone the repository with submodules:
     ```sh
-    git clone --recurse-submodules https://github.com/sourcebot-dev/sourcebot.git
+    git clone --recurse-submodules git@git.kudelski.com:KS/solutions/ide-infra/sourcebot.git
     ```
-4. Run `make` to build zoekt and install dependencies:
+
+5. Run `make` to build zoekt and install dependencies:
     ```sh
     cd sourcebot
     make
@@ -74,31 +49,40 @@ Want to take on an issue? Leave a comment and a maintainer may assign it to you 
 
     The zoekt binaries and web dependencies are placed into `bin` and `node_modules` respectively.
 
-    **Note**: `make` should also be run whenever switching between branches to ensure all dependencies are upto date.
+    **Note**: Run `make` again whenever you switch branches so all dependencies stay up to date.
 
-5. Start the development Docker containers for PostgreSQL and Redis.
-
+6. Start the development Docker containers for PostgreSQL and Redis:
     ```sh
     docker compose -f docker-compose-dev.yml up -d
     ```
 
-6. Generate the database schema.
+7. Generate the database schema:
     ```sh
     yarn dev:prisma:migrate:dev
     ```
 
-7. Create a copy of `.env.development` and name it `.env.development.local`. Update the required environment variables.
+8. Create a copy of `.env.development` and name it `.env.development.local`. Update the required environment variables.
 
-8. If you're using a declarative configuration file, create a configuration file and update the `CONFIG_PATH` environment variable in your `.env.development.local` file.
+9. If you're using a declarative configuration file, create it and point the `CONFIG_PATH` environment variable in your `.env.development.local` file at it.
 
-9. Start Sourcebot with the command:
+10. Start Sourcebot:
     ```sh
     yarn dev
     ```
 
-    A `.sourcebot` directory will be created and zoekt will begin to index the repositories found in the `config.json` file.
+    A `.sourcebot` directory is created and zoekt begins indexing the repositories found in the `config.json` file.
 
-10. Start searching at `http://localhost:3000`.
+11. Start searching at `http://localhost:3000`.
+
+## Testing
+
+Run the tests for all workspaces:
+
+```sh
+yarn test
+```
+
+The `test:yarn` job in [.gitlab-ci.yml](.gitlab-ci.yml) runs the same tests on every pipeline and reports coverage.
 
 ## Debugging
 
@@ -112,46 +96,21 @@ To enable it, set the following in your `.env.development.local`:
 DEBUG_ENABLE_REACT_SCAN=true
 ```
 
-Then restart the dev server. Components that re-render will be highlighted in the browser.
+Then restart the dev server. Components that re-render are highlighted in the browser.
 
-## Pull Request Expectations
+## Merge Requests
 
-### Issue First Policy
+- Open merge requests against `master` on [GitLab](https://git.kudelski.com/KS/solutions/ide-infra/sourcebot/-/merge_requests).
+- Keep merge requests small and focused.
+- Explain the problem and why your change fixes it.
+- Before adding new functionality, check that it doesn't already exist elsewhere in the codebase.
+- Make sure the pipeline passes before asking for a review.
+- For UI changes, include before and after screenshots.
+- For logic changes, explain how you verified the change and how a reviewer can reproduce it.
 
-**All PRs must reference an existing issue.** Before opening a PR, open an issue describing the bug or feature. This helps maintainers triage and prevents duplicate work. PRs without a linked issue may be closed without review.
+### Titles
 
-- Use `Fixes #123` or `Closes #123` in your PR description to link the issue
-- For small fixes, a brief issue is fine - just enough context for maintainers to understand the problem
-
-### General Requirements
-
-- Keep pull requests small and focused
-- Explain the issue and why your change fixes it
-- Before adding new functionality, ensure it doesn't already exist elsewhere in the codebase
-- Update `CHANGELOG.md` with an entry under `[Unreleased]` linking to your PR. New entries should be placed at the bottom of their section.
-
-### UI Changes
-
-If your PR includes UI changes, please include screenshots or videos showing the before and after. This helps maintainers review faster and gives you quicker feedback.
-
-### Logic Changes
-
-For non-UI changes (bug fixes, new features, refactors), explain **how you verified it works**:
-
-- What did you test?
-- How can a reviewer reproduce/confirm the fix?
-
-### No AI-Generated Walls of Text
-
-Long, AI-generated PR descriptions and issues are not acceptable and may be ignored. Respect the maintainers' time:
-
-- Write short, focused descriptions
-- Explain what changed and why in your own words
-- If you can't explain it briefly, your PR might be too large
-
-### PR Titles
-
-PR titles should follow conventional commit standards:
+Merge request titles follow conventional commit standards:
 
 - `feat:` new feature or functionality
 - `fix:` bug fix

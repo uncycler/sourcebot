@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Suggestion, SuggestionMode } from "./searchSuggestionsBox";
 import { listRepos, search } from "@/app/api/(client)/client";
-import { getSearchContexts } from "@/actions";
 import { useMemo } from "react";
 import { SearchSymbol } from "@/features/search";
 import { languageMetadataMap } from "@/lib/languageMetadata";
@@ -103,24 +102,6 @@ export const useSuggestionsData = ({
     });
     const isLoadingSymbols = useMemo(() => suggestionMode === "symbol" && _isLoadingSymbols, [suggestionMode, _isLoadingSymbols]);
 
-    const { data: searchContextSuggestions, isLoading: _isLoadingSearchContexts } = useQuery({
-        queryKey: ["searchContexts"],
-        queryFn: () => getSearchContexts(),
-        select: (data): Suggestion[] => {
-            if (isServiceError(data)) {
-                return [];
-            }
-
-            return data.map((context) => ({
-                value: context.name,
-                description: context.description,
-            }));
-
-        },
-        enabled: suggestionMode === "context",
-    });
-    const isLoadingSearchContexts = useMemo(() => suggestionMode === "context" && _isLoadingSearchContexts, [_isLoadingSearchContexts, suggestionMode]);
-
     const languageSuggestions = useMemo((): Suggestion[] => {
         return Object.keys(languageMetadataMap).map((lang) => {
             const spotlight = [
@@ -148,14 +129,13 @@ export const useSuggestionsData = ({
     }, [searchHistory]);
 
     const isLoadingSuggestions = useMemo(() => {
-        return isLoadingSymbols || isLoadingFiles || isLoadingRepos || isLoadingSearchContexts;
-    }, [isLoadingFiles, isLoadingRepos, isLoadingSymbols, isLoadingSearchContexts]);
+        return isLoadingSymbols || isLoadingFiles || isLoadingRepos;
+    }, [isLoadingFiles, isLoadingRepos, isLoadingSymbols]);
 
     return {
         repoSuggestions: repoSuggestions ?? [],
         fileSuggestions: fileSuggestions ?? [],
         symbolSuggestions: symbolSuggestions ?? [],
-        searchContextSuggestions: searchContextSuggestions ?? [],
         languageSuggestions,
         searchHistorySuggestions,
         isLoadingSuggestions,

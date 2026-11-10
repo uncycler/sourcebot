@@ -2,12 +2,10 @@ import { sew } from "@/middleware/sew";
 import { ServiceError, notFound, fileNotFound, invalidGitRef, unresolvedGitRef, unexpectedError } from '@/lib/serviceError';
 import { withOptionalAuth } from '@/middleware/withAuth';
 import { getRepoPath } from '@sourcebot/shared';
-import { headers } from 'next/headers';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import type z from 'zod';
 import { isGitRefValid, isPathValid } from './utils';
 import { fileBlameRequestSchema, fileBlameResponseSchema } from './schemas';
-import { createAudit } from "@/ee/features/audit/audit";
 
 export { fileBlameRequestSchema, fileBlameResponseSchema } from './schemas';
 export type FileBlameRequest = z.infer<typeof fileBlameRequestSchema>;
@@ -156,20 +154,9 @@ const parsePorcelainBlame = (output: string): FileBlameResponse => {
     return { ranges: coalescedRanges, commits };
 };
 
-export const getFileBlame = async ({ path: filePath, repo: repoName, ref }: FileBlameRequest, { source }: { source?: string } = {}): Promise<FileBlameResponse | ServiceError> =>
+export const getFileBlame = async ({ path: filePath, repo: repoName, ref }: FileBlameRequest): Promise<FileBlameResponse | ServiceError> =>
     sew(() =>
-        withOptionalAuth(async ({ org, prisma, user }) => {
-            if (user) {
-                const resolvedSource = source ?? (await headers()).get('X-Sourcebot-Client-Source') ?? undefined;
-                await createAudit({
-                    action: 'user.fetched_file_blame',
-                    actor: { id: user.id, type: 'user' },
-                    target: { id: org.id.toString(), type: 'org' },
-                    orgId: org.id,
-                    metadata: { source: resolvedSource },
-                });
-            }
-
+        withOptionalAuth(async ({ org, prisma }) => {
             const repo = await prisma.repo.findFirst({
                 where: { name: repoName, orgId: org.id },
             });

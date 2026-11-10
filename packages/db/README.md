@@ -19,6 +19,6 @@ yarn tool:prisma migrate resolve --rolled-back "migration_name" --url postgresql
 - `yarn tool:run-script` - runs a script (located in the `/tools/scripts` directory) that performs some operations against the DB. This is useful for writing bespoke CRUD operations while still being type-safe and having all the perks of the prisma client lib.
 
 ```sh
-# Run `migrate-duplicate-connections.ts`
-yarn tool:run-script --script  migrate-duplicate-connections --url postgresql://username:password@url:5432/db_name
+# Run `inject-repo-data.ts`
+yarn tool:run-script --script inject-repo-data --url postgresql://username:password@url:5432/db_name
 ```

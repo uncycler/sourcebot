@@ -1,21 +1,12 @@
 import { SourcebotLogo } from "@/app/components/sourcebotLogo"
-import { RepositoryCarousel } from "../../components/repositoryCarousel"
-import { Separator } from "@/components/ui/separator"
 import { SyntaxReferenceGuideHint } from "../../components/syntaxReferenceGuideHint"
 import Link from "next/link"
 import { SearchBar } from "../../components/searchBar"
-import { SearchModeSelector } from "../../components/searchModeSelector"
-import { getRepos, getReposStats } from "@/actions"
+import { getRepos } from "@/actions"
 import { ServiceErrorException } from "@/lib/serviceError"
 import { isServiceError } from "@/lib/utils"
 
-export interface SearchLandingPageProps {
-    isSearchAssistSupported: boolean;
-}
-
-export const SearchLandingPage = async ({
-    isSearchAssistSupported,
-}: SearchLandingPageProps) => {
+export const SearchLandingPage = async () => {
     const carouselRepos = await getRepos({
         where: {
             indexedAt: {
@@ -25,10 +16,7 @@ export const SearchLandingPage = async ({
         take: 10,
     });
 
-    const repoStats = await getReposStats();
-
     if (isServiceError(carouselRepos)) throw new ServiceErrorException(carouselRepos);
-    if (isServiceError(repoStats)) throw new ServiceErrorException(repoStats);
 
     return (
         <div className="flex flex-col items-center overflow-hidden">
@@ -42,26 +30,10 @@ export const SearchLandingPage = async ({
                     <SearchBar
                         autoFocus={true}
                         className="border-none pt-0.5 pb-0"
-                        isSearchAssistSupported={isSearchAssistSupported}
-                    />
-                    <Separator />
-                    <div className="w-full flex flex-row items-center bg-accent rounded-b-md px-2">
-                        <SearchModeSelector
-                            searchMode="precise"
-                            className="ml-auto"
-                        />
-                    </div>
-                </div>
-
-                <div className="mt-8">
-                    <RepositoryCarousel
-                        numberOfReposWithIndex={repoStats.numberOfReposWithIndex}
-                        displayRepos={carouselRepos}
                     />
                 </div>
 
-                <div className="flex flex-col items-center w-fit gap-6">
-                    <Separator className="mt-5" />
+                <div className="flex flex-col items-center w-fit gap-6 mt-8">
                     <span className="font-semibold">How to search</span>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <HowToSection

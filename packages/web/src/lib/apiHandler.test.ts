@@ -1,11 +1,7 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { NextRequest } from 'next/server';
 import { apiHandler } from './apiHandler';
 import { getCurrentRequest } from './requestContext';
-
-vi.mock('./posthog', () => ({
-    captureEvent: vi.fn(),
-}));
 
 describe('apiHandler', () => {
     test('stores the current request while the handler runs', async () => {

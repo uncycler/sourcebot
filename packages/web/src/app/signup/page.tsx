@@ -2,10 +2,10 @@ import { auth } from "@/auth";
 import { LoginForm } from "../login/components/loginForm";
 import { redirect } from "next/navigation";
 import { Footer } from "@/app/components/footer";
-import { createLogger, env } from "@sourcebot/shared";
+import { createLogger } from "@sourcebot/shared";
 import { SINGLE_TENANT_ORG_ID } from "@/lib/constants";
 import { __unsafePrisma } from "@/prisma";
-import { isAnonymousAccessEnabled } from "@/lib/entitlements";
+import { isAnonymousAccessEnabled } from "@/lib/anonymousAccess";
 
 const logger = createLogger('signup-page');
 
@@ -38,8 +38,8 @@ export default async function Signup(props: LoginProps) {
                     callbackUrl={searchParams.callbackUrl}
                     error={searchParams.error}
                     context="signup"
+                    loginMessage={org.loginMessage}
                     isAnonymousAccessEnabled={anonymousAccessEnabled}
-                    hideSecurityNotice={env.EXPERIMENT_ASK_GH_ENABLED === 'true'}
                 />
             </div>
             <Footer />

@@ -24,8 +24,6 @@ interface MembersTableViewProps {
     invites: Invite[];
     requests: Request[];
     currentUserId: string;
-    hasOrgManagement: boolean;
-    scimEnabled: boolean;
 }
 
 const FILTER_QUERY_PARAM = "filter";
@@ -65,8 +63,6 @@ export const MembersTableView = ({
     invites,
     requests,
     currentUserId,
-    hasOrgManagement,
-    scimEnabled,
 }: MembersTableViewProps) => {
     const router = useRouter();
     const pathname = usePathname();
@@ -211,8 +207,6 @@ export const MembersTableView = ({
                 searchQuery={searchQuery}
                 onClearFilters={clearFilters}
                 currentUserId={currentUserId}
-                hasOrgManagement={hasOrgManagement}
-                scimEnabled={scimEnabled}
             />
         </div>
     );

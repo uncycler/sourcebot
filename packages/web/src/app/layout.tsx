@@ -1,7 +1,6 @@
 /**
  * Render all routes at request time rather than build time,
- * since every route depends on per-request session, entitlements,
- * and DB-backed data, none of which are available at build time.
+ * since every route depends on per-request session and DB-backed data, none of which are available at build time.
  * @see https://nextjs.org/docs/app/guides/caching-without-cache-components#route-segment-config
  */
 export const dynamic = 'force-dynamic';
@@ -12,16 +11,12 @@ import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import { ProgressBarProvider } from "./progressBarProvider";
 import { QueryClientProvider } from "./queryClientProvider";
-import { PostHogProvider } from "./posthogProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SessionProvider } from "next-auth/react";
-import { env, SOURCEBOT_VERSION } from "@sourcebot/shared";
-import { PlanProvider } from "@/features/entitlements/planProvider";
-import { getEntitlements } from "@/lib/entitlements";
+import { env } from "@sourcebot/shared";
 import { IdentityProvidersProvider } from "@/features/auth/identityProvidersProvider";
 import { getIdentityProviderMetadata } from "@/lib/identityProviders";
-import { SentryUserProvider } from "./sentryUserProvider";
 
 export const metadata: Metadata = {
     metadataBase: env.AUTH_URL ? new URL(env.AUTH_URL) : undefined,
@@ -41,7 +36,6 @@ export default async function RootLayout({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const entitlements = await getEntitlements();
     const identityProviders = await getIdentityProviderMetadata();
 
     return (
@@ -75,37 +69,22 @@ export default async function RootLayout({
             <body>
                 <Toaster />
                 <SessionProvider>
-                    <SentryUserProvider
-                        isPiiEnabled={env.SOURCEBOT_TELEMETRY_PII_COLLECTION_ENABLED === 'true'}
-                    />
-                    <PlanProvider entitlements={entitlements}>
-                        <IdentityProvidersProvider providers={identityProviders}>
-                            <PostHogProvider
-                                isDisabled={env.SOURCEBOT_TELEMETRY_DISABLED === 'true'}
-                                isPiiEnabled={env.SOURCEBOT_TELEMETRY_PII_COLLECTION_ENABLED === 'true'}
-                                // @note: the posthog api key doesn't need to be kept secret,
-                                // so we are safe to send it to the client.
-                                posthogApiKey={env.POSTHOG_PAPIK}
-                                sourcebotVersion={SOURCEBOT_VERSION}
-                                sourcebotInstallId={env.SOURCEBOT_INSTALL_ID}
-                            >
-                                <ThemeProvider
-                                    attribute="class"
-                                    defaultTheme="system"
-                                    enableSystem
-                                    disableTransitionOnChange
-                                >
-                                    <QueryClientProvider>
-                                        <TooltipProvider>
-                                            <ProgressBarProvider>
-                                                {children}
-                                            </ProgressBarProvider>
-                                        </TooltipProvider>
-                                    </QueryClientProvider>
-                                </ThemeProvider>
-                            </PostHogProvider>
-                        </IdentityProvidersProvider>
-                    </PlanProvider>
+                    <IdentityProvidersProvider providers={identityProviders}>
+                        <ThemeProvider
+                            attribute="class"
+                            defaultTheme="system"
+                            enableSystem
+                            disableTransitionOnChange
+                        >
+                            <QueryClientProvider>
+                                <TooltipProvider>
+                                    <ProgressBarProvider>
+                                        {children}
+                                    </ProgressBarProvider>
+                                </TooltipProvider>
+                            </QueryClientProvider>
+                        </ThemeProvider>
+                    </IdentityProvidersProvider>
                 </SessionProvider>
             </body>
         </html>

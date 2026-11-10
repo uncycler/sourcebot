@@ -1,13 +1,7 @@
 import { OpenApiGeneratorV3, OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
 import type { ComponentsObject, SchemaObject, SecuritySchemeObject } from 'openapi3-ts/oas30';
 import { type ZodTypeAny } from 'zod';
-import z from 'zod';
 import {
-    publicEeAuditQuerySchema,
-    publicEeAuditResponseSchema,
-    publicEeDeleteUserResponseSchema,
-    publicEeUserSchema,
-    publicEeUsersResponseSchema,
     publicFileBlameRequestSchema,
     publicFileBlameResponseSchema,
     publicFileSourceRequestSchema,
@@ -24,6 +18,7 @@ import {
     publicListCommitAuthorsResponseSchema,
     publicListCommitsQuerySchema,
     publicListCommitsResponseSchema,
+    publicListConnectionsResponseSchema,
     publicListReposQueryParamsSchema,
     publicListReposResponseSchema,
     publicSearchRequestSchema,
@@ -34,16 +29,10 @@ import {
 import dedent from 'dedent';
 
 const searchTag = { name: 'Search & Navigation', description: 'Code search and symbol navigation endpoints.' };
+const connectionsTag = { name: 'Connections', description: 'Code host connection metadata.' };
 const reposTag = { name: 'Repositories', description: 'Repository listing and metadata endpoints.' };
 const gitTag = { name: 'Git', description: 'Git history, diff, and file content endpoints.' };
 const systemTag = { name: 'System', description: 'System health and version endpoints.' };
-const eeTag = { name: 'Enterprise (EE)', description: 'Enterprise endpoints for user management and audit logging.' };
-
-const EE_LICENSE_KEY_NOTE = dedent`
-<Note>
-This API is only available with an active Sourcebot license. [More information](/docs/activating-a-subscription).
-</Note>
-`;
 
 const publicFileTreeNodeSchema: SchemaObject = {
     type: 'object',
@@ -78,7 +67,7 @@ const securitySchemes: Record<keyof typeof securitySchemeNames, SecuritySchemeOb
     [securitySchemeNames.bearerToken]: {
         type: 'http',
         scheme: 'bearer',
-        description: 'Bearer authentication header of the form `Bearer <token>`, where `<token>` is your API key.',
+        description: 'Bearer authentication header of the form `Bearer <token>`. The token must be a Sourcebot API key.',
     },
     [securitySchemeNames.apiKeyHeader]: {
         type: 'apiKey',
@@ -169,6 +158,23 @@ export function createPublicOpenApiDocument(version: string) {
             },
             400: errorJson('Invalid query parameters.'),
             500: errorJson('Unexpected repository listing failure.'),
+        },
+    });
+
+    registry.registerPath({
+        method: 'get',
+        path: '/api/connections',
+        operationId: 'listConnections',
+        tags: [connectionsTag.name],
+        summary: 'List connections',
+        description: 'Returns unique code host connections associated with at least one repository visible to the caller. Connection configuration and credentials are never included.',
+        responses: {
+            200: {
+                description: 'Connections associated with visible repositories.',
+                content: jsonContent(publicListConnectionsResponseSchema),
+            },
+            401: errorJson('Authentication is required when anonymous access is disabled.'),
+            500: errorJson('Unexpected connection listing failure.'),
         },
     });
 
@@ -426,116 +432,6 @@ export function createPublicOpenApiDocument(version: string) {
         },
     });
 
-    // EE: User Management
-    registry.registerPath({
-        method: 'get',
-        path: '/api/ee/user',
-        operationId: 'getUser',
-        tags: [eeTag.name],
-        summary: 'Get a user',
-        description: 'Fetches details for a single organization member by `userId`. Only organization owners can access this endpoint.',
-        request: {
-            query: z.object({
-                userId: z.string().describe('The ID of the user to retrieve.'),
-            }),
-        },
-        responses: {
-            200: {
-                description: 'User details.',
-                content: jsonContent(publicEeUserSchema),
-            },
-            400: errorJson('Missing userId parameter.'),
-            403: errorJson('Insufficient permissions or entitlement not enabled.'),
-            404: errorJson('User is not a member of this organization.'),
-            500: errorJson('Unexpected failure.'),
-        },
-        'x-mint': {
-            content: EE_LICENSE_KEY_NOTE,
-        },
-    });
-
-    registry.registerPath({
-        method: 'delete',
-        path: '/api/ee/user',
-        operationId: 'deleteUser',
-        tags: [eeTag.name],
-        summary: 'Remove a user from the organization',
-        description: 'Removes a user from the organization, revoking their access and their sessions. Only organization owners can access this endpoint.',
-        request: {
-            query: z.object({
-                userId: z.string().describe('The ID of the user to remove.'),
-            }),
-        },
-        responses: {
-            200: {
-                description: 'User removed successfully.',
-                content: jsonContent(publicEeDeleteUserResponseSchema),
-            },
-            400: errorJson('Missing userId parameter.'),
-            403: errorJson('Insufficient permissions, the last active owner cannot be removed, or SCIM provisioning is enabled (membership is managed through your identity provider).'),
-            404: errorJson('User is not a member of this organization.'),
-            500: errorJson('Unexpected failure.'),
-        },
-        'x-mint': {
-            content: EE_LICENSE_KEY_NOTE,
-        },
-    });
-
-    registry.registerPath({
-        method: 'get',
-        path: '/api/ee/users',
-        operationId: 'listUsers',
-        tags: [eeTag.name],
-        summary: 'List users',
-        description: 'Returns all members of the organization. Only organization owners can access this endpoint.',
-        responses: {
-            200: {
-                description: 'List of organization members.',
-                content: jsonContent(publicEeUsersResponseSchema),
-            },
-            403: errorJson('Insufficient permissions or entitlement not enabled.'),
-            500: errorJson('Unexpected failure.'),
-        },
-        'x-mint': {
-            content: EE_LICENSE_KEY_NOTE,
-        },
-    });
-
-    // EE: Audit
-    registry.registerPath({
-        method: 'get',
-        path: '/api/ee/audit',
-        operationId: 'listAuditRecords',
-        tags: [eeTag.name],
-        summary: 'List audit records',
-        description: 'Returns a paginated list of audit log entries. Only organization owners can access this endpoint.',
-        request: {
-            query: publicEeAuditQuerySchema,
-        },
-        responses: {
-            200: {
-                description: 'Paginated audit log.',
-                headers: {
-                    'X-Total-Count': {
-                        description: 'Total number of audit records matching the query across all pages.',
-                        schema: { type: 'integer' },
-                    },
-                    Link: {
-                        description: 'Pagination links formatted per RFC 8288.',
-                        schema: { type: 'string' },
-                    },
-                },
-                content: jsonContent(publicEeAuditResponseSchema),
-            },
-            400: errorJson('Invalid query parameters.'),
-            403: errorJson('Insufficient permissions or entitlement not enabled.'),
-            500: errorJson('Unexpected failure.'),
-        },
-        'x-mint': {
-            content: EE_LICENSE_KEY_NOTE,
-        },
-    });
-
     const generator = new OpenApiGeneratorV3(registry.definitions);
 
     const document = generator.generateDocument({
@@ -543,9 +439,9 @@ export function createPublicOpenApiDocument(version: string) {
         info: {
             title: 'Sourcebot Public API',
             version,
-            description: 'OpenAPI description for the public Sourcebot REST endpoints used for search, repository listing, and file browsing. Authentication is instance-dependent: API keys are the standard integration mechanism, OAuth bearer tokens are EE-only, and some instances may allow anonymous access.',
+            description: 'OpenAPI description for the public Sourcebot REST endpoints used for search, repository listing, and file browsing. Authentication is instance-dependent: API keys are the standard integration mechanism, and some instances may allow anonymous access.',
         },
-        tags: [searchTag, reposTag, gitTag, systemTag, eeTag],
+        tags: [searchTag, connectionsTag, reposTag, gitTag, systemTag],
         security: [
             { [securitySchemeNames.bearerToken]: [] },
             { [securitySchemeNames.apiKeyHeader]: [] },

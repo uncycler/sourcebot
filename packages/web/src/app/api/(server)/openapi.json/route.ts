@@ -18,4 +18,4 @@ export const GET = apiHandler(async () => {
             'Content-Type': 'application/vnd.oai.openapi+json;version=3.0.3',
         },
     });
-}, { track: false });
+});

@@ -3,28 +3,14 @@
 import { useMemo } from "react";
 import { Suggestion } from "./searchSuggestionsBox";
 import { SearchPrefix } from "./constants";
-import { useHasEntitlement } from "@/features/entitlements/useHasEntitlement";
 
 const negate = (prefix: SearchPrefix) => {
     return `-${prefix}`;
 }
 
 export const useRefineModeSuggestions = () => {
-    const isSearchContextsEnabled = useHasEntitlement('search-contexts');
-
     const suggestions = useMemo((): Suggestion[] => {
         return [
-            ...(isSearchContextsEnabled ? [
-                {
-                    value: SearchPrefix.context,
-                    description: "Include only results from the given search context.",
-                    spotlight: true,
-                },
-                {
-                    value: negate(SearchPrefix.context),
-                    description: "Exclude results from the given search context."
-                },
-            ] : []),
             {
                 value: SearchPrefix.visibility,
                 description: "Filter on repository visibility."
@@ -91,7 +77,7 @@ export const useRefineModeSuggestions = () => {
                 description: "Include only results from forked repositories."
             },
         ];
-    }, [isSearchContextsEnabled]);
+    }, []);
 
     return suggestions;
 }

@@ -30,12 +30,14 @@
                 "resyncConnectionPollingIntervalMs": {
                     "type": "number",
                     "description": "The polling rate (in milliseconds) at which the db should be checked for connections that need to be re-synced. Defaults to 1 second.",
-                    "minimum": 1
+                    "minimum": 1,
+                    "deprecated": true
                 },
                 "reindexRepoPollingIntervalMs": {
                     "type": "number",
                     "description": "The polling rate (in milliseconds) at which the db should be checked for repos that should be re-indexed. Defaults to 1 second.",
-                    "minimum": 1
+                    "minimum": 1,
+                    "deprecated": true
                 },
                 "maxConnectionSyncJobConcurrency": {
                     "type": "number",
@@ -50,7 +52,8 @@
                 "maxRepoGarbageCollectionJobConcurrency": {
                     "type": "number",
                     "description": "The number of repo GC jobs to run concurrently. Defaults to 8.",
-                    "minimum": 1
+                    "minimum": 1,
+                    "deprecated": true
                 },
                 "repoGarbageCollectionGracePeriodMs": {
                     "type": "number",
@@ -67,44 +70,9 @@
                     "deprecated": true,
                     "description": "This setting is deprecated. Please use the `FORCE_ENABLE_ANONYMOUS_ACCESS` environment variable instead.",
                     "default": false
-                },
-                "repoDrivenPermissionSyncIntervalMs": {
-                    "type": "number",
-                    "description": "The interval (in milliseconds) at which the repo permission syncer should run. Defaults to 24 hours.",
-                    "minimum": 1
-                },
-                "userDrivenPermissionSyncIntervalMs": {
-                    "type": "number",
-                    "description": "The interval (in milliseconds) at which the user permission syncer should run. Defaults to 24 hours.",
-                    "minimum": 1
-                },
-                "experiment_repoDrivenPermissionSyncIntervalMs": {
-                    "type": "number",
-                    "deprecated": true,
-                    "description": "Deprecated. Use `repoDrivenPermissionSyncIntervalMs` instead.",
-                    "minimum": 1
-                },
-                "experiment_userDrivenPermissionSyncIntervalMs": {
-                    "type": "number",
-                    "deprecated": true,
-                    "description": "Deprecated. Use `userDrivenPermissionSyncIntervalMs` instead.",
-                    "minimum": 1
-                },
-                "maxAccountPermissionSyncJobConcurrency": {
-                    "type": "number",
-                    "description": "The number of account permission sync jobs to run concurrently. Defaults to 8.",
-                    "minimum": 1
-                },
-                "maxRepoPermissionSyncJobConcurrency": {
-                    "type": "number",
-                    "description": "The number of repo permission sync jobs to run concurrently. Defaults to 8.",
-                    "minimum": 1
                 }
             },
             "additionalProperties": false
-        },
-        "SearchContext": {
-            "$ref": "./searchContext.json"
         }
     },
     "properties": {
@@ -113,16 +81,6 @@
         },
         "settings": {
             "$ref": "#/definitions/Settings"
-        },
-        "contexts": {
-            "type": "object",
-            "description": "[Sourcebot EE] Defines a collection of search contexts. This is only available in single-tenancy mode. See: https://docs.sourcebot.dev/docs/features/search/search-contexts",
-            "patternProperties": {
-                "^[a-zA-Z0-9_-]+$": {
-                    "$ref": "#/definitions/SearchContext"
-                }
-            },
-            "additionalProperties": false
         },
         "environmentOverrides": {
             "$ref": "./environmentOverrides.json"
@@ -136,41 +94,6 @@
                 }
             },
             "additionalProperties": false
-        },
-        "models": {
-            "type": "array",
-            "description": "Defines a collection of language models that are available to Sourcebot.",
-            "items": {
-                "$ref": "./languageModel.json"
-            }
-        },
-        "apps": {
-            "type": "array",
-            "description": "Defines a collection of apps that are available to Sourcebot.",
-            "items": {
-                "$ref": "./app.json"
-            }
-        },
-        "identityProviders": {
-            "description": "Defines a collection of identity providers that are available to Sourcebot.",
-            "oneOf": [
-                {
-                    "type": "object",
-                    "description": "Map of identity providers keyed by a unique id.`.",
-                    "patternProperties": {
-                        "^[a-zA-Z0-9_-]+$": {
-                            "$ref": "./identityProvider.json"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                {
-                    "type": "array",
-                    "items": {
-                        "$ref": "./identityProvider.json"
-                    }
-                }
-            ]
         }
     },
     "additionalProperties": false

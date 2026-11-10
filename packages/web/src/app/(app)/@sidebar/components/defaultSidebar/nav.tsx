@@ -5,15 +5,11 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { BookMarkedIcon, type LucideIcon, MessageCircleIcon, MessagesSquareIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { BookMarkedIcon, type LucideIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { HomeView } from "@/hooks/useHomeView";
 import { NotificationDot } from "../../../components/notificationDot";
 import { useMemo } from "react";
 import Link from "next/link";
-import { useEntitlements } from "@/features/entitlements/useEntitlements";
-import { Entitlement } from "@sourcebot/shared";
-import { UpgradeBadge } from "../upgradeBadge";
 
 interface NavItem {
     title: string;
@@ -21,25 +17,18 @@ interface NavItem {
     icon: LucideIcon;
     key: string;
     requiresAuth?: boolean;
-    requiredEntitlement?: Entitlement;
-    // When true, the item is hidden entirely if the required entitlement is
-    // missing, instead of being shown with an upgrade badge.
-    hideIfMissingEntitlement?: boolean;
 }
 
 interface NavProps {
     isSettingsNotificationVisible?: boolean;
     isSignedIn?: boolean;
-    homeView: HomeView;
 }
 
 export function Nav({
     isSettingsNotificationVisible,
     isSignedIn,
-    homeView
 }: NavProps) {
     const pathname = usePathname();
-    const entitlements = useEntitlements();
 
     const baseItems = useMemo((): NavItem[] => {
 
@@ -50,31 +39,8 @@ export function Nav({
             key: "search",
         }
 
-        const askItem: NavItem = {
-            title: "Ask",
-            href: "/chat",
-            icon: MessageCircleIcon,
-            key: "chat",
-            requiredEntitlement: "ask"
-        }
-
         return [
-            ...(homeView === "search" ? [
-                searchItem,
-                askItem,
-            ] : [
-                askItem,
-                searchItem,
-            ]),
-            {
-                title: "Chats",
-                href: "/chats",
-                icon: MessagesSquareIcon,
-                key: "chats",
-                requiresAuth: true,
-                requiredEntitlement: "ask",
-                hideIfMissingEntitlement: true,
-            },
+            searchItem,
             {
                 title: "Repositories",
                 href: "/repos",
@@ -91,23 +57,17 @@ export function Nav({
         ]
 
 
-    }, [homeView]);
+    }, []);
 
     const isActive = (href: string) => {
         if (pathname === "/") {
-            return (
-                (homeView === "ask" && href === "/chat") ||
-                (homeView === "search" && href === "/search")
-            )
+            return href === "/search";
         }
 
         if (href === "/search") {
             return pathname.startsWith("/search");
         }
 
-        if (href === "/chat") {
-            return pathname === "/chat";
-        }
         return pathname.startsWith(href);
     };
 
@@ -115,13 +75,10 @@ export function Nav({
         <SidebarMenu>
             {baseItems
                 .filter((item) => !item.requiresAuth || isSignedIn)
-                .filter((item) => !item.hideIfMissingEntitlement || !item.requiredEntitlement || entitlements.includes(item.requiredEntitlement))
                 .map((item) => {
                 const showNotification =
                     (item.key === "settings" && isSettingsNotificationVisible);
 
-                const showUpgradeBadge =
-                    (item.requiredEntitlement && !entitlements.includes(item.requiredEntitlement));
 
                 return (
                     <SidebarMenuItem key={item.title}>
@@ -131,7 +88,6 @@ export function Nav({
                             >
                                 <item.icon />
                                 <span>{item.title}</span>
-                                {showUpgradeBadge && <UpgradeBadge />}
                                 {showNotification && <NotificationDot className="ml-1.5" />}
                             </Link>
                         </SidebarMenuButton>

@@ -4,7 +4,7 @@ import NextAuth, { DefaultSession, Session, User as AuthJsUser } from "next-auth
 import Credentials from "next-auth/providers/credentials"
 import EmailProvider from "next-auth/providers/nodemailer";
 import { __unsafePrisma } from "@/prisma";
-import { createLogger, env, getSMTPConnectionURL } from "@sourcebot/shared";
+import { env, getSMTPConnectionURL } from "@sourcebot/shared";
 import { User } from '@sourcebot/db';
 import 'next-auth/jwt';
 import type { Provider } from "next-auth/providers";
@@ -13,20 +13,12 @@ import { createTransport } from 'nodemailer';
 import { render } from '@react-email/render';
 import MagicLinkEmail from './emails/magicLinkEmail';
 import bcrypt from 'bcryptjs';
-import { getEEIdentityProviders } from '@/ee/features/sso/sso';
-import { hasEntitlement } from '@/lib/entitlements';
-import { createAudit } from '@/ee/features/audit/audit';
 import { SINGLE_TENANT_ORG_ID } from './lib/constants';
-import { EncryptedPrismaAdapter, encryptAccountData } from '@/lib/encryptedPrismaAdapter';
-import { getAnonymousId } from '@/lib/anonymousId';
-import { captureEvent } from '@/lib/posthog';
+import { EncryptedPrismaAdapter } from '@/lib/encryptedPrismaAdapter';
 import { isEmailCodeLoginEnabled, isCredentialsLoginEnabled } from '@sourcebot/shared'
 import { onCreateUser } from './features/membership/onCreateUser';
-import { setSentryUser } from './lib/sentryUser';
-import { requestAccountPermissionSync } from './features/workerApi/client.server';
 
 export const runtime = 'nodejs';
-const logger = createLogger('auth');
 
 export type IdentityProvider = {
     /** Provider type (e.g., 'github', 'gitlab') — used to pick icon / display defaults. */
@@ -35,9 +27,7 @@ export type IdentityProvider = {
     id: string;
     /** Optional admin-supplied display name from config; overrides type-derived defaults in the UI. */
     displayName?: string;
-    purpose: "sso" | "account_linking";
-    issuerUrl?: string;
-    required?: boolean;
+    purpose: "sso";
     /**
      * @warning don't use this field directly - this is meant to be
      * passed directly to auth.js. Use the fields directly on the
@@ -71,10 +61,7 @@ declare module 'next-auth/jwt' {
 }
 
 export const getProviders = async () => {
-    const hasSSOEntitlement = await hasEntitlement("sso");
-    const providers: IdentityProvider[] = [
-        ...(hasSSOEntitlement ? await getEEIdentityProviders() : []),
-    ];
+    const providers: IdentityProvider[] = [];
     const org = await __unsafePrisma.org.findUnique({ where: { id: SINGLE_TENANT_ORG_ID } });
 
     const smtpConnectionUrl = getSMTPConnectionURL();
@@ -99,7 +86,7 @@ export const getProviders = async () => {
                         text: `Log in to Sourcebot using this code: ${token}`
                     });
 
-                    const failed = result.rejected.concat(result.pending).filter(Boolean);
+                    const failed = result.rejected.concat(result.pending ?? []).filter(Boolean);
                     if (failed.length) {
                         throw new Error(`Email(s) (${failed.join(", ")}) could not be sent`);
                     }
@@ -192,91 +179,6 @@ const nextAuthResult = NextAuth(async () => ({
     trustHost: true,
     events: {
         createUser: onCreateUser,
-        signIn: async ({ user, account }) => {
-            // Explicitly update the Account record with the OAuth token details.
-            // This is necessary to update the access token when the user
-            // re-authenticates.
-            // NOTE: Tokens are encrypted before storage for security
-            if (
-                account &&
-                (account.type === 'oauth' || account.type === 'oidc') &&
-                account.provider &&
-                account.providerAccountId
-            ) {
-                const issuerUrl = await getIssuerUrlForProviderId(account.provider);
-
-                const updatedAccount = await __unsafePrisma.account.update({
-                    where: {
-                        providerId_providerAccountId: {
-                            providerId: account.provider,
-                            providerAccountId: account.providerAccountId,
-                        },
-                    },
-                    data: encryptAccountData({
-                        refresh_token: account.refresh_token,
-                        access_token: account.access_token,
-                        expires_at: account.expires_at,
-                        token_type: account.token_type,
-                        scope: account.scope,
-                        id_token: account.id_token,
-                        issuerUrl,
-                        // Clear any token refresh error since the user has successfully re-authenticated.
-                        tokenRefreshErrorMessage: null,
-                    })
-                });
-
-                if (
-                    updatedAccount.permissionSyncIssue !== null &&
-                    env.PERMISSION_SYNC_ENABLED === 'true'
-                ) {
-                    try {
-                        if (await hasEntitlement('permission-syncing')) {
-                            await requestAccountPermissionSync(updatedAccount.id);
-                        }
-                    } catch (error) {
-                        const message = error instanceof Error ? error.message : String(error);
-                        logger.error(`Failed to schedule permission sync after reauthentication for account ${updatedAccount.id}: ${message}`);
-                    }
-                }
-            }
-
-            if (user.id) {
-                // Claim any anonymous chats created before sign-in.
-                const anonymousId = await getAnonymousId();
-                if (anonymousId) {
-                    const result = await __unsafePrisma.chat.updateMany({
-                        where: {
-                            orgId: SINGLE_TENANT_ORG_ID,
-                            anonymousCreatorId: anonymousId,
-                            createdById: null,
-                        },
-                        data: {
-                            createdById: user.id,
-                            anonymousCreatorId: null,
-                        },
-                    });
-
-                    if (result.count > 0) {
-                        await captureEvent('wa_anonymous_chats_claimed', {
-                            claimedCount: result.count,
-                        });
-                    }
-                }
-
-                await createAudit({
-                    action: "user.signed_in",
-                    actor: {
-                        id: user.id,
-                        type: "user"
-                    },
-                    orgId: SINGLE_TENANT_ORG_ID, // TODO(mt)
-                    target: {
-                        id: user.id,
-                        type: "user"
-                    }
-                });
-            }
-        },
         signOut: async (message) => {
             const token = message as { token: { userId: string } | null };
             if (token?.token?.userId) {
@@ -289,54 +191,13 @@ const nextAuthResult = NextAuth(async () => ({
                     data: { sessionVersion: { increment: 1 } },
                 });
 
-                await createAudit({
-                    action: "user.signed_out",
-                    actor: {
-                        id: token.token.userId,
-                        type: "user"
-                    },
-                    orgId: SINGLE_TENANT_ORG_ID, // TODO(mt)
-                    target: {
-                        id: token.token.userId,
-                        type: "user"
-                    }
-                });
             }
         }
     },
     callbacks: {
-        async signIn({ account, user }) {
-            const matchingProvider = account
-                ? (await getProviders()).find((p) => p.id === account.provider)
-                : undefined;
-
-            // Refuse OAuth signin for providers configured purely for account
-            // linking when no authenticated user is present on the request.
-            //
-            // Background: @auth/core's handleLoginOrRegister (callback/handle-login.js)
-            // reads the session token from the request and, if it can't decode it
-            // (e.g., the session cookie expired browser-side mid auth flow, or it
-            // never made it across the cross-site redirect),
-            // falls through to `createUser({ ...profile })`, silently spawning a
-            // new orphan User row from the OAuth profile. That's correct behavior
-            // for `purpose: "sso"` providers (an unauthenticated user logging in
-            // via SSO should become a new Sourcebot user). It's wrong for
-            // `purpose: "account_linking"` providers: by definition, those should
-            // only ever attach an upstream identity to an *existing* signed-in
-            // user, never mint a new Sourcebot user.
-            //
-            // Returning `false` here short-circuits the callback action with an
-            // `AccessDenied` before handleLoginOrRegister can run, redirecting
-            // the user to the error page instead of leaving them stranded as a
-            // new orphan identity with no UserToOrg row.
-            const isAccountLinkingAttempt = matchingProvider?.purpose === 'account_linking';
-            const session = await auth();
-            if (isAccountLinkingAttempt && session === null) {
-                return false;
-            }
-
+        async signIn({ user }) {
             // Reject any sign-in that arrives without an email.
-            // @see 20260616000000_make_user_email_required/migration.sql
+            // `User.email` is required in packages/db/prisma/schema.prisma.
             if (!user.email) {
                 return '/login/error?error=EmailRequired';
             }
@@ -373,27 +234,17 @@ const nextAuthResult = NextAuth(async () => ({
             }
 
             if (token.userId) {
-                // Single query: fetch the user's current sessionVersion for
-                // the cross-check below, plus any accounts that still need
-                // the issuerUrl lazy migration.
-                //
-                // @see https://github.com/sourcebot-dev/sourcebot/pull/993
+                // Fetch the user's current sessionVersion for the cross-check below.
                 const dbUser = await __unsafePrisma.user.findUnique({
                     where: {
                         id: token.userId as string,
                     },
                     select: {
                         sessionVersion: true,
-                        accounts: {
-                            where: {
-                                issuerUrl: null,
-                            },
-                        },
                     },
                 });
 
-                // The user row was removed (e.g., deleted via /api/ee/user
-                // or org-removal cascade). Treat the JWT as invalid so
+                // The user row was removed (e.g., by an org-removal cascade). Treat the JWT as invalid so
                 // /api/auth/session reports logged-out and @auth/core clears
                 // the cookie from the browser.
                 if (!dbUser) {
@@ -412,23 +263,6 @@ const nextAuthResult = NextAuth(async () => ({
                     return null;
                 }
 
-                // Lazy migration of issuerUrl on accounts created before
-                // the column was introduced in v4.15.4. The where clause
-                // above scopes this to only accounts that still need it,
-                // so the loop is a no-op once everyone is backfilled.
-                for (const account of dbUser.accounts) {
-                    const issuerUrl = await getIssuerUrlForProviderId(account.providerId);
-                    if (issuerUrl) {
-                        await __unsafePrisma.account.update({
-                            where: {
-                                id: account.id,
-                            },
-                            data: {
-                                issuerUrl,
-                            },
-                        });
-                    }
-                }
             }
 
             return token;
@@ -470,19 +304,6 @@ export const { handlers, signIn, signOut } = nextAuthResult;
  */
 export const auth = cache(async (): Promise<Session | null> => {
     const session = await nextAuthResult.auth();
-    setSentryUser(
-        session?.user ?? null,
-        env.SOURCEBOT_TELEMETRY_PII_COLLECTION_ENABLED === 'true',
-    );
     return session;
 });
 
-/**
- * Returns the issuer URL for a given identity provider id (i.e., the auth.js
- * provider id, which is also what we store in `Account.providerId`).
- */
-const getIssuerUrlForProviderId = async (providerId: string) => {
-    const providers = await getProviders();
-    const matchingProvider = providers.find((provider) => provider.id === providerId);
-    return matchingProvider?.issuerUrl;
-}

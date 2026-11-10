@@ -9,5 +9,5 @@ const logger = createLogger('health-check');
 export const GET = apiHandler(async () => {
     logger.debug('health check');
     return Response.json({ status: 'ok' });
-}, { track: false });
+});
 

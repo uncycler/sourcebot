@@ -10,7 +10,6 @@ import { ArrowLeft, Loader2 } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 import { useCallback, useState, Suspense } from "react"
 import { SourcebotLogo } from "@/app/components/sourcebotLogo"
-import useCaptureEvent from "@/hooks/useCaptureEvent"
 import { Footer } from "@/app/components/footer"
 import { SOURCEBOT_SUPPORT_EMAIL } from "@/lib/constants"
 import { Redirect } from "@/app/components/redirect"
@@ -20,7 +19,6 @@ function VerifyPageContent() {
     const [isVerifying, setIsVerifying] = useState(false)
     const searchParams = useSearchParams()
     const email = searchParams.get("email")
-    const captureEvent = useCaptureEvent();
 
     const handleSubmit = useCallback((code: string) => {
         if (isVerifying || !email || code.length !== 6) {
@@ -47,7 +45,6 @@ function VerifyPageContent() {
     }
 
     if (!email) {
-        captureEvent("wa_login_verify_page_no_email", {})
         return <Redirect
             to="/login"
         />

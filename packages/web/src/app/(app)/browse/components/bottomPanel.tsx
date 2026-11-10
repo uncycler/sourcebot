@@ -6,18 +6,14 @@ import { ResizablePanel } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList } from "@/components/ui/tabs";
 import { LowProfileTabsTrigger } from "@/components/ui/tab-switcher";
-import { useHasEntitlement } from "@/features/entitlements/useHasEntitlement";
 import { useCallback, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { FaChevronDown } from "react-icons/fa";
-import { VscReferences, VscSymbolMisc } from "react-icons/vsc";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { useBrowseState } from "../hooks/useBrowseState";
 import { useBrowseParams } from "../hooks/useBrowseParams";
 import { getBrowsePath } from "../hooks/utils";
-import { ExploreMenu } from "@/ee/features/codeNav/components/exploreMenu";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { History } from "lucide-react";
 import type { BrowseState } from "../browseStateProvider";
 import { HistoryPanel } from "./historyPanel";
@@ -25,7 +21,6 @@ import { LatestCommitInfo } from "./latestCommitInfo";
 
 export const BOTTOM_PANEL_MIN_SIZE = 35;
 export const BOTTOM_PANEL_MAX_SIZE = 65;
-const CODE_NAV_DOCS_URL = "https://docs.sourcebot.dev/docs/features/code-navigation";
 
 interface BottomPanelProps {
     order: number;
@@ -35,11 +30,9 @@ type BottomPanelTab = BrowseState["activeBottomPanelTab"];
 
 export const BottomPanel = ({ order }: BottomPanelProps) => {
     const panelRef = useRef<ImperativePanelHandle>(null);
-    const hasCodeNavEntitlement = useHasEntitlement("code-nav");
-    const router = useRouter();
 
     const {
-        state: { selectedSymbolInfo, isBottomPanelCollapsed, bottomPanelSize, activeBottomPanelTab },
+        state: { isBottomPanelCollapsed, bottomPanelSize, activeBottomPanelTab },
         updateBrowseState,
     } = useBrowseState();
 
@@ -71,15 +64,6 @@ export const BottomPanel = ({ order }: BottomPanelProps) => {
         updateBrowseState({ activeBottomPanelTab: tab });
     }, [isBottomPanelCollapsed, activeBottomPanelTab, updateBrowseState]);
 
-    useHotkeys("shift+mod+e", (event) => {
-        event.preventDefault();
-        onTabClick("explore");
-    }, {
-        enableOnFormTags: true,
-        enableOnContentEditable: true,
-        description: "Open Explore Panel",
-    });
-
     useHotkeys("shift+mod+h", (event) => {
         event.preventDefault();
         onTabClick("history");
@@ -106,17 +90,6 @@ export const BottomPanel = ({ order }: BottomPanelProps) => {
                                 <History className="w-4 h-4" />
                                 History
                                 <KeyboardShortcutHint shortcut="shift+mod+h" />
-                            </span>
-                        </LowProfileTabsTrigger>
-                        <LowProfileTabsTrigger
-                            value="explore"
-                            onClick={() => onTabClick("explore")}
-                            className="text-foreground"
-                        >
-                            <span className="flex flex-row items-center gap-2">
-                                <VscReferences className="w-4 h-4" />
-                                Explore
-                                <KeyboardShortcutHint shortcut="shift+mod+e" />
                             </span>
                         </LowProfileTabsTrigger>
                     </TabsList>
@@ -168,42 +141,7 @@ export const BottomPanel = ({ order }: BottomPanelProps) => {
                 order={order}
                 id={"bottom-panel"}
             >
-                {activeBottomPanelTab === "explore" ? (
-                    !hasCodeNavEntitlement ? (
-                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-                            <VscSymbolMisc className="w-6 h-6" />
-                            <p className="text-sm">
-                                Code navigation is not enabled for <span className="text-blue-500 hover:underline cursor-pointer" onClick={() => router.push(`/settings/license`)}>your plan</span>.
-                            </p>
-
-                            <Link
-                                href={CODE_NAV_DOCS_URL}
-                                target="_blank"
-                                className="text-sm text-blue-500 hover:underline"
-                            >
-                                Learn more
-                            </Link>
-                        </div>
-                    ) : !selectedSymbolInfo ? (
-                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-                            <VscSymbolMisc className="w-6 h-6" />
-                            <p className="text-sm">No symbol selected</p>
-                            <Link
-                                href={CODE_NAV_DOCS_URL}
-                                target="_blank"
-                                className="text-sm text-blue-500 hover:underline"
-                            >
-                                Learn more
-                            </Link>
-                        </div>
-                    ) : (
-                        <ExploreMenu
-                            selectedSymbolInfo={selectedSymbolInfo}
-                        />
-                    )
-                ) : (
-                    <HistoryPanel />
-                )}
+                <HistoryPanel />
             </ResizablePanel>
         </>
     )

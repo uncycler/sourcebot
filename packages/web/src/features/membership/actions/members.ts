@@ -1,8 +1,6 @@
 'use server';
 
-import { membershipManagedByIdpError } from "@/features/membership/errors";
 import { removeMember, setMembershipSuspended } from "@/features/membership/membership.service";
-import { isScimEnabled } from "@/features/scim/utils";
 import { ServiceError } from "@/lib/serviceError";
 import { isServiceError } from "@/lib/utils";
 import { sew } from "@/middleware/sew";
@@ -11,15 +9,9 @@ import { withMinimumOrgRole } from "@/middleware/withMinimumOrgRole";
 import { OrgRole } from "@sourcebot/db";
 
 export const removeMemberFromOrg = async (memberId: string): Promise<{ success: boolean } | ServiceError> => sew(() =>
-    withAuth(async ({ user, org, role }) =>
+    withAuth(async ({ org, role }) =>
         withMinimumOrgRole(role, OrgRole.OWNER, async () => {
-            if (await isScimEnabled(org)) {
-                return membershipManagedByIdpError();
-            }
-
-            const result = await removeMember(org.id, memberId, {
-                actor: { id: user.id, type: "user" },
-            });
+            const result = await removeMember(org.id, memberId);
 
             if (isServiceError(result)) {
                 return result;
@@ -30,15 +22,9 @@ export const removeMemberFromOrg = async (memberId: string): Promise<{ success: 
 );
 
 export const suspendMember = async (memberId: string): Promise<{ success: boolean } | ServiceError> => sew(() =>
-    withAuth(async ({ user, org, role }) =>
+    withAuth(async ({ org, role }) =>
         withMinimumOrgRole(role, OrgRole.OWNER, async () => {
-            if (await isScimEnabled(org)) {
-                return membershipManagedByIdpError();
-            }
-
-            const result = await setMembershipSuspended(org.id, memberId, true, {
-                actor: { id: user.id, type: "user" },
-            });
+            const result = await setMembershipSuspended(org.id, memberId, true);
 
             if (isServiceError(result)) {
                 return result;
@@ -49,15 +35,9 @@ export const suspendMember = async (memberId: string): Promise<{ success: boolea
 );
 
 export const reactivateMember = async (memberId: string): Promise<{ success: boolean } | ServiceError> => sew(() =>
-    withAuth(async ({ user, org, role }) =>
+    withAuth(async ({ org, role }) =>
         withMinimumOrgRole(role, OrgRole.OWNER, async () => {
-            if (await isScimEnabled(org)) {
-                return membershipManagedByIdpError();
-            }
-
-            const result = await setMembershipSuspended(org.id, memberId, false, {
-                actor: { id: user.id, type: "user" },
-            });
+            const result = await setMembershipSuspended(org.id, memberId, false);
 
             if (isServiceError(result)) {
                 return result;
@@ -69,12 +49,7 @@ export const reactivateMember = async (memberId: string): Promise<{ success: boo
 
 export const leaveOrg = async (): Promise<{ success: boolean } | ServiceError> => sew(() =>
     withAuth(async ({ user, org }) => {
-        if (await isScimEnabled(org)) {
-            return membershipManagedByIdpError();
-        }
-
         const result = await removeMember(org.id, user.id, {
-            actor: { id: user.id, type: "user" },
             reason: "left",
         });
 
@@ -108,7 +83,6 @@ export const getOrgMembers = async () => sew(() =>
                 role: member.role,
                 joinedAt: member.joinedAt,
                 suspendedAt: member.suspendedAt,
-                scimManaged: !!member.scimExternalId,
                 lastActiveAt: member.lastActiveAt,
             }));
         })));

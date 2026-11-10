@@ -2,7 +2,6 @@
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserAvatar } from "@/components/userAvatar";
-import { HomeView, useHomeView } from "@/hooks/useHomeView";
 import { useKeymapType } from "@/hooks/useKeymapType";
 import { KeymapType } from "@/lib/types";
 import { useTheme } from "next-themes";
@@ -13,11 +12,6 @@ const themeOptions = [
     { value: "light", label: "Light" },
     { value: "dark", label: "Dark" },
     { value: "system", label: "System" },
-] as const;
-
-const homeViewOptions = [
-    { value: "search", label: "Code Search" },
-    { value: "ask", label: "Ask" },
 ] as const;
 
 const keymapOptions = [
@@ -31,9 +25,12 @@ interface GeneralPageProps {
     userImage?: string;
 }
 
-export function GeneralPage({ userName, userEmail, userImage }: GeneralPageProps) {
+export function GeneralPage({
+    userName,
+    userEmail,
+    userImage,
+}: GeneralPageProps) {
     const { theme: _theme, setTheme } = useTheme();
-    const [homeView, setHomeView] = useHomeView();
     const [keymapType, setKeymapType] = useKeymapType();
 
     const theme = useMemo(() => {
@@ -71,20 +68,6 @@ export function GeneralPage({ userName, userEmail, userImage }: GeneralPageProps
             <div className="flex flex-col gap-2">
                 <h4 className="text-sm font-medium text-muted-foreground">Preferences</h4>
                 <SettingsCardGroup>
-                    <BasicSettingsCard name="Default home view" description="Choose which page to show when you open Sourcebot.">
-                        <Select value={homeView} onValueChange={(value) => setHomeView(value as HomeView)}>
-                            <SelectTrigger className="w-36">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {homeViewOptions.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </BasicSettingsCard>
                     <BasicSettingsCard name="Appearance" description="Choose how Sourcebot looks to you.">
                         <Select value={theme} onValueChange={setTheme}>
                             <SelectTrigger className="w-36">

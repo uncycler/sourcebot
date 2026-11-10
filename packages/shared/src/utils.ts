@@ -4,9 +4,9 @@ import { z } from "zod";
 import { DEFAULT_CONFIG_SETTINGS } from "./constants.js";
 import { ConfigSettings } from "./types.js";
 import { Org, Repo } from "@sourcebot/db";
+import type { SourcebotConfig } from "@sourcebot/schemas/v3/index.type";
 import path from "path";
 import { env, isRemotePath, loadConfig } from "./env.server.js";
-import { isAnonymousAccessAvailable } from './entitlements.js';
 
 // From https://developer.mozilla.org/en-US/docs/Glossary/Base64#the_unicode_problem
 export const base64Decode = (base64: string): string => {
@@ -21,6 +21,7 @@ export const loadJsonFile = async <T>(
 ): Promise<T> => {
     const fileContent = await (async () => {
         if (isRemotePath(filePath)) {
+            // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
             const response = await fetch(filePath);
             if (!response.ok) {
                 throw new Error(`Failed to fetch file ${filePath}: ${response.statusText}`);
@@ -68,33 +69,25 @@ export const loadJsonFile = async <T>(
         return schema.parse(parsedData);
     } catch (error) {
         if (error instanceof z.ZodError) {
-            throw new Error(`File '${filePath}' is invalid: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+            throw new Error(`File '${filePath}' is invalid: ${error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
         }
         throw error;
     }
 }
 
 
+export const resolveConfigSettings = (config: SourcebotConfig): ConfigSettings =>
+    ({
+        ...DEFAULT_CONFIG_SETTINGS,
+        ...config.settings,
+    });
+
 export const getConfigSettings = async (configPath?: string): Promise<ConfigSettings> => {
     if (!configPath) {
         return DEFAULT_CONFIG_SETTINGS;
     }
 
-    const config = await loadConfig(configPath);
-
-    return {
-        ...DEFAULT_CONFIG_SETTINGS,
-        ...config.settings,
-        // Fall back to deprecated experiment_ variants if new keys are not set.
-        repoDrivenPermissionSyncIntervalMs:
-            config.settings?.repoDrivenPermissionSyncIntervalMs
-            ?? config.settings?.experiment_repoDrivenPermissionSyncIntervalMs
-            ?? DEFAULT_CONFIG_SETTINGS.repoDrivenPermissionSyncIntervalMs,
-        userDrivenPermissionSyncIntervalMs:
-            config.settings?.userDrivenPermissionSyncIntervalMs
-            ?? config.settings?.experiment_userDrivenPermissionSyncIntervalMs
-            ?? DEFAULT_CONFIG_SETTINGS.userDrivenPermissionSyncIntervalMs,
-    }
+    return resolveConfigSettings(await loadConfig(configPath));
 }
 
 export const getRepoIdFromPath = (repoPath: string): number | undefined => {

@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { Footer } from "@/app/components/footer";
 import { SINGLE_TENANT_ORG_ID } from "@/lib/constants";
 import { __unsafePrisma } from "@/prisma";
-import { env } from "@sourcebot/shared";
-import { isAnonymousAccessEnabled } from "@/lib/entitlements";
+import { isAnonymousAccessEnabled } from "@/lib/anonymousAccess";
 
 interface LoginProps {
     searchParams: Promise<{
@@ -35,8 +34,8 @@ export default async function Login(props: LoginProps) {
                     callbackUrl={searchParams.callbackUrl}
                     error={searchParams.error}
                     context="login"
+                    loginMessage={org.loginMessage}
                     isAnonymousAccessEnabled={anonymousAccessEnabled}
-                    hideSecurityNotice={env.EXPERIMENT_ASK_GH_ENABLED === 'true'}
                 />
             </div>
             <Footer />

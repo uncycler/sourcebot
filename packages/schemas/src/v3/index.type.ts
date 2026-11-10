@@ -12,47 +12,10 @@ export type ConnectionConfig =
   | BitbucketConnectionConfig
   | AzureDevOpsConnectionConfig
   | GenericGitHostConnectionConfig;
-export type LanguageModel =
-  | AmazonBedrockLanguageModel
-  | AnthropicLanguageModel
-  | AzureLanguageModel
-  | DeepSeekLanguageModel
-  | GoogleGenerativeAILanguageModel
-  | GoogleVertexAnthropicLanguageModel
-  | GoogleVertexLanguageModel
-  | MistralLanguageModel
-  | OpenAILanguageModel
-  | OpenAICompatibleLanguageModel
-  | OpenRouterLanguageModel
-  | XaiLanguageModel;
-export type AppConfig = GitHubAppConfig;
-/**
- * This interface was referenced by `undefined`'s JSON-Schema definition
- * via the `patternProperty` "^[a-zA-Z0-9_-]+$".
- */
-export type IdentityProviderConfig =
-  | GitHubIdentityProviderConfig
-  | GitLabIdentityProviderConfig
-  | GoogleIdentityProviderConfig
-  | OktaIdentityProviderConfig
-  | KeycloakIdentityProviderConfig
-  | MicrosoftEntraIDIdentityProviderConfig
-  | GCPIAPIdentityProviderConfig
-  | AuthentikIdentityProviderConfig
-  | BitbucketCloudIdentityProviderConfig
-  | JumpCloudIdentityProviderConfig
-  | IdiraIdentityProviderConfig
-  | BitbucketServerIdentityProviderConfig;
 
 export interface SourcebotConfig {
   $schema?: string;
   settings?: Settings;
-  /**
-   * [Sourcebot EE] Defines a collection of search contexts. This is only available in single-tenancy mode. See: https://docs.sourcebot.dev/docs/features/search/search-contexts
-   */
-  contexts?: {
-    [k: string]: SearchContext;
-  };
   environmentOverrides?: EnvironmentOverrides;
   /**
    * Defines a collection of connections from varying code hosts that Sourcebot should sync with. This is only available in single-tenancy mode.
@@ -60,22 +23,6 @@ export interface SourcebotConfig {
   connections?: {
     [k: string]: ConnectionConfig;
   };
-  /**
-   * Defines a collection of language models that are available to Sourcebot.
-   */
-  models?: LanguageModel[];
-  /**
-   * Defines a collection of apps that are available to Sourcebot.
-   */
-  apps?: AppConfig[];
-  /**
-   * Defines a collection of identity providers that are available to Sourcebot.
-   */
-  identityProviders?:
-    | {
-        [k: string]: IdentityProviderConfig;
-      }
-    | IdentityProviderConfig[];
 }
 /**
  * Defines the global settings for Sourcebot.
@@ -101,10 +48,12 @@ export interface Settings {
    */
   resyncConnectionIntervalMs?: number;
   /**
+   * @deprecated
    * The polling rate (in milliseconds) at which the db should be checked for connections that need to be re-synced. Defaults to 1 second.
    */
   resyncConnectionPollingIntervalMs?: number;
   /**
+   * @deprecated
    * The polling rate (in milliseconds) at which the db should be checked for repos that should be re-indexed. Defaults to 1 second.
    */
   reindexRepoPollingIntervalMs?: number;
@@ -117,6 +66,7 @@ export interface Settings {
    */
   maxRepoIndexingJobConcurrency?: number;
   /**
+   * @deprecated
    * The number of repo GC jobs to run concurrently. Defaults to 8.
    */
   maxRepoGarbageCollectionJobConcurrency?: number;
@@ -133,71 +83,6 @@ export interface Settings {
    * This setting is deprecated. Please use the `FORCE_ENABLE_ANONYMOUS_ACCESS` environment variable instead.
    */
   enablePublicAccess?: boolean;
-  /**
-   * The interval (in milliseconds) at which the repo permission syncer should run. Defaults to 24 hours.
-   */
-  repoDrivenPermissionSyncIntervalMs?: number;
-  /**
-   * The interval (in milliseconds) at which the user permission syncer should run. Defaults to 24 hours.
-   */
-  userDrivenPermissionSyncIntervalMs?: number;
-  /**
-   * @deprecated
-   * Deprecated. Use `repoDrivenPermissionSyncIntervalMs` instead.
-   */
-  experiment_repoDrivenPermissionSyncIntervalMs?: number;
-  /**
-   * @deprecated
-   * Deprecated. Use `userDrivenPermissionSyncIntervalMs` instead.
-   */
-  experiment_userDrivenPermissionSyncIntervalMs?: number;
-  /**
-   * The number of account permission sync jobs to run concurrently. Defaults to 8.
-   */
-  maxAccountPermissionSyncJobConcurrency?: number;
-  /**
-   * The number of repo permission sync jobs to run concurrently. Defaults to 8.
-   */
-  maxRepoPermissionSyncJobConcurrency?: number;
-}
-/**
- * Search context
- *
- * This interface was referenced by `undefined`'s JSON-Schema definition
- * via the `patternProperty` "^[a-zA-Z0-9_-]+$".
- *
- * This interface was referenced by `SourcebotConfig`'s JSON-Schema
- * via the `definition` "SearchContext".
- */
-export interface SearchContext {
-  /**
-   * List of repositories to include in the search context. Expected to be formatted as a URL without any leading http(s):// prefix (e.g., 'github.com/sourcebot-dev/sourcebot'). Glob patterns are supported.
-   */
-  include?: string[];
-  /**
-   * List of connections to include in the search context.
-   */
-  includeConnections?: string[];
-  /**
-   * List of repositories to exclude from the search context. Expected to be formatted as a URL without any leading http(s):// prefix (e.g., 'github.com/sourcebot-dev/sourcebot'). Glob patterns are supported.
-   */
-  exclude?: string[];
-  /**
-   * List of connections to exclude from the search context.
-   */
-  excludeConnections?: string[];
-  /**
-   * List of repository topics to include in the search context. Only repositories matching at least one topic are included. Glob patterns are supported.
-   */
-  includeTopics?: string[];
-  /**
-   * List of repository topics to exclude from the search context. Repositories matching any of these topics are excluded. Glob patterns are supported.
-   */
-  excludeTopics?: string[];
-  /**
-   * Optional description of the search context that surfaces in the UI.
-   */
-  description?: string;
 }
 /**
  * Environment variable overrides.
@@ -210,19 +95,7 @@ export interface EnvironmentOverrides {
   [k: string]:
     | {
         type: "token";
-        value:
-          | {
-              /**
-               * The name of the environment variable that contains the token.
-               */
-              env: string;
-            }
-          | {
-              /**
-               * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-               */
-              googleCloudSecret: string;
-            };
+        value: Token;
       }
     | {
         type: "string";
@@ -237,27 +110,18 @@ export interface EnvironmentOverrides {
         value: boolean;
       };
 }
+export interface Token {
+  /**
+   * The name of the environment variable that contains the token.
+   */
+  env: string;
+}
 export interface GithubConnectionConfig {
   /**
    * GitHub Configuration
    */
   type: "github";
-  /**
-   * A Personal Access Token (PAT).
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
+  token?: Token1;
   /**
    * The URL of the GitHub host. Defaults to https://github.com
    */
@@ -290,6 +154,10 @@ export interface GithubConnectionConfig {
      */
     archived?: boolean;
     /**
+     * Exclude private repositories from syncing. Internal repositories are not affected.
+     */
+    private?: boolean;
+    /**
      * List of individual repositories to exclude from syncing. Glob patterns are supported.
      */
     repos?: string[];
@@ -312,14 +180,15 @@ export interface GithubConnectionConfig {
     };
   };
   revisions?: GitRevisions;
+}
+/**
+ * A Personal Access Token (PAT).
+ */
+export interface Token1 {
   /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
+   * The name of the environment variable that contains the token.
    */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
+  env: string;
 }
 /**
  * The revisions (branches, tags) that should be included when indexing. The default branch (HEAD) is always indexed. A maximum of 64 revisions can be indexed, with any additional revisions being ignored.
@@ -339,22 +208,7 @@ export interface GitlabConnectionConfig {
    * GitLab Configuration
    */
   type: "gitlab";
-  /**
-   * An authentication token.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
+  token?: Token2;
   /**
    * The URL of the GitLab host. Defaults to https://gitlab.com
    */
@@ -408,36 +262,22 @@ export interface GitlabConnectionConfig {
     topics?: string[];
   };
   revisions?: GitRevisions;
+}
+/**
+ * An authentication token.
+ */
+export interface Token2 {
   /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
+   * The name of the environment variable that contains the token.
    */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
+  env: string;
 }
 export interface GiteaConnectionConfig {
   /**
    * Gitea Configuration
    */
   type: "gitea";
-  /**
-   * A Personal Access Token (PAT).
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
+  token?: Token3;
   /**
    * The URL of the Gitea host. Defaults to https://gitea.com
    */
@@ -469,14 +309,15 @@ export interface GiteaConnectionConfig {
     repos?: string[];
   };
   revisions?: GitRevisions;
+}
+/**
+ * A Personal Access Token (PAT).
+ */
+export interface Token3 {
   /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
+   * The name of the environment variable that contains the token.
    */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
+  env: string;
 }
 export interface GerritConnectionConfig {
   /**
@@ -506,14 +347,6 @@ export interface GerritConnectionConfig {
     hidden?: boolean;
   };
   revisions?: GitRevisions;
-  /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
 }
 export interface BitbucketConnectionConfig {
   /**
@@ -528,22 +361,7 @@ export interface BitbucketConnectionConfig {
    * The username to use for git clone authentication over HTTPS. If not set, falls back to 'user'. For API tokens, this is your Bitbucket username
    */
   gitUser?: string;
-  /**
-   * An authentication token.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
+  token?: Token4;
   /**
    * Bitbucket URL
    */
@@ -583,36 +401,22 @@ export interface BitbucketConnectionConfig {
     repos?: string[];
   };
   revisions?: GitRevisions;
+}
+/**
+ * An authentication token.
+ */
+export interface Token4 {
   /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
+   * The name of the environment variable that contains the token.
    */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
+  env: string;
 }
 export interface AzureDevOpsConnectionConfig {
   /**
    * Azure DevOps Configuration
    */
   type: "azuredevops";
-  /**
-   * A Personal Access Token (PAT).
-   */
-  token:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
+  token: Token5;
   /**
    * The URL of the Azure DevOps host. For Azure DevOps Cloud, use https://dev.azure.com. For Azure DevOps Server, use your server URL.
    */
@@ -665,14 +469,15 @@ export interface AzureDevOpsConnectionConfig {
     };
   };
   revisions?: GitRevisions;
+}
+/**
+ * A Personal Access Token (PAT).
+ */
+export interface Token5 {
   /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
+   * The name of the environment variable that contains the token.
    */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
+  env: string;
 }
 export interface GenericGitHostConnectionConfig {
   /**
@@ -684,1162 +489,4 @@ export interface GenericGitHostConnectionConfig {
    */
   url: string;
   revisions?: GitRevisions;
-  /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
-}
-export interface AmazonBedrockLanguageModel {
-  /**
-   * Amazon Bedrock Configuration
-   */
-  provider: "amazon-bedrock";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional access key ID to use with the model. Defaults to the `AWS_ACCESS_KEY_ID` environment variable.
-   */
-  accessKeyId?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional secret access key to use with the model. Defaults to the `AWS_SECRET_ACCESS_KEY` environment variable.
-   */
-  accessKeySecret?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional session token to use with the model. Defaults to the `AWS_SESSION_TOKEN` environment variable.
-   */
-  sessionToken?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * The AWS region. Defaults to the `AWS_REGION` environment variable.
-   */
-  region?: string;
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-/**
- * Optional headers to use with the model.
- */
-export interface LanguageModelHeaders {
-  /**
-   * This interface was referenced by `LanguageModelHeaders`'s JSON-Schema definition
-   * via the `patternProperty` "^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$".
-   */
-  [k: string]:
-    | string
-    | (
-        | {
-            /**
-             * The name of the environment variable that contains the token.
-             */
-            env: string;
-          }
-        | {
-            /**
-             * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-             */
-            googleCloudSecret: string;
-          }
-      );
-}
-export interface AnthropicLanguageModel {
-  /**
-   * Anthropic Configuration
-   */
-  provider: "anthropic";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key to use with the model, sent as the `x-api-key` header. Defaults to the `ANTHROPIC_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional auth token to use with the model, sent as the `Authorization: Bearer` header. Defaults to the `ANTHROPIC_AUTH_TOKEN` environment variable.
-   */
-  authToken?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface AzureLanguageModel {
-  /**
-   * Azure Configuration
-   */
-  provider: "azure";
-  /**
-   * The deployment name of the Azure model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Azure resource name. Defaults to the `AZURE_RESOURCE_NAME` environment variable.
-   */
-  resourceName?: string;
-  /**
-   * Optional API key to use with the model. Defaults to the `AZURE_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Sets a custom api version. Defaults to `preview`.
-   */
-  apiVersion?: string;
-  /**
-   * Use a different URL prefix for API calls. Either this or `resourceName` can be used.
-   */
-  baseUrl?: string;
-  /**
-   * The reasoning effort to use with the model. Defaults to `medium`. See https://platform.openai.com/docs/guides/reasoning#get-started-with-reasonings
-   */
-  reasoningEffort?: string;
-  /**
-   * Controls whether the model returns its reasoning process. Set to 'auto' for a condensed summary, 'detailed' for more comprehensive reasoning, or 'none' to disable. Defaults to 'auto'.
-   */
-  reasoningSummary?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface DeepSeekLanguageModel {
-  /**
-   * DeepSeek Configuration
-   */
-  provider: "deepseek";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key to use with the model. Defaults to the `DEEPSEEK_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface GoogleGenerativeAILanguageModel {
-  /**
-   * Google Generative AI Configuration
-   */
-  provider: "google-generative-ai";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key to use with the model. Defaults to the `GOOGLE_GENERATIVE_AI_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional thinking level for Gemini 3 models. Controls the depth of reasoning the model performs. See https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
-   */
-  thinkingLevel?: "minimal" | "low" | "medium" | "high";
-  /**
-   * Optional thinking budget for Gemini 2.5 models. Sets the number of thinking tokens the model can use when generating a response. Set to -1 for dynamic thinking. See https://ai.google.dev/gemini-api/docs/thinking#set-budget
-   */
-  thinkingBudget?: number;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface GoogleVertexAnthropicLanguageModel {
-  /**
-   * Google Vertex AI Anthropic Configuration
-   */
-  provider: "google-vertex-anthropic";
-  /**
-   * The name of the Anthropic language model running on Google Vertex.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * The Google Cloud project ID. Defaults to the `GOOGLE_VERTEX_PROJECT` environment variable.
-   */
-  project?: string;
-  /**
-   * The Google Cloud region. Defaults to the `GOOGLE_VERTEX_REGION` environment variable.
-   */
-  region?: string;
-  /**
-   * Optional file path to service account credentials JSON. Defaults to the `GOOGLE_APPLICATION_CREDENTIALS` environment variable or application default credentials.
-   */
-  credentials?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface GoogleVertexLanguageModel {
-  /**
-   * Google Vertex AI Configuration
-   */
-  provider: "google-vertex";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * The Google Cloud project ID. Defaults to the `GOOGLE_VERTEX_PROJECT` environment variable.
-   */
-  project?: string;
-  /**
-   * The Google Cloud region. Defaults to the `GOOGLE_VERTEX_REGION` environment variable.
-   */
-  region?: string;
-  /**
-   * Optional file path to service account credentials JSON. Defaults to the `GOOGLE_APPLICATION_CREDENTIALS` environment variable or application default credentials.
-   */
-  credentials?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional thinking level for Gemini 3 models. Controls the depth of reasoning the model performs. See https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
-   */
-  thinkingLevel?: "minimal" | "low" | "medium" | "high";
-  /**
-   * Optional thinking budget for Gemini 2.5 models. Sets the number of thinking tokens the model can use when generating a response. Set to -1 for dynamic thinking. See https://ai.google.dev/gemini-api/docs/thinking#set-budget
-   */
-  thinkingBudget?: number;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface MistralLanguageModel {
-  /**
-   * Mistral AI Configuration
-   */
-  provider: "mistral";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key to use with the model. Defaults to the `MISTRAL_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface OpenAILanguageModel {
-  /**
-   * OpenAI Configuration
-   */
-  provider: "openai";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key to use with the model. Defaults to the `OPENAI_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * The reasoning effort to use with the model. Defaults to `medium`. See https://platform.openai.com/docs/guides/reasoning#get-started-with-reasonings
-   */
-  reasoningEffort?: string;
-  /**
-   * Controls whether the model returns its reasoning process. Set to 'auto' for a condensed summary, 'detailed' for more comprehensive reasoning, or 'none' to disable. Defaults to 'auto'.
-   */
-  reasoningSummary?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface OpenAICompatibleLanguageModel {
-  /**
-   * OpenAI Compatible Configuration
-   */
-  provider: "openai-compatible";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key. If specified, adds an `Authorization` header to request headers with the value Bearer <token>.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Base URL of the OpenAI-compatible chat completions API endpoint.
-   */
-  baseUrl: string;
-  headers?: LanguageModelHeaders;
-  queryParams?: LanguageModelQueryParams;
-  /**
-   * The name of the XML tag to extract reasoning from (without angle brackets). Defaults to `think`.
-   */
-  reasoningTag?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-}
-/**
- * Optional query parameters to include in the request url.
- */
-export interface LanguageModelQueryParams {
-  /**
-   * This interface was referenced by `LanguageModelQueryParams`'s JSON-Schema definition
-   * via the `patternProperty` "^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$".
-   */
-  [k: string]:
-    | string
-    | (
-        | {
-            /**
-             * The name of the environment variable that contains the token.
-             */
-            env: string;
-          }
-        | {
-            /**
-             * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-             */
-            googleCloudSecret: string;
-          }
-      );
-}
-export interface OpenRouterLanguageModel {
-  /**
-   * OpenRouter Configuration
-   */
-  provider: "openrouter";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key to use with the model. Defaults to the `OPENROUTER_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface XaiLanguageModel {
-  /**
-   * xAI Configuration
-   */
-  provider: "xai";
-  /**
-   * The name of the language model.
-   */
-  model: string;
-  /**
-   * Optional display name.
-   */
-  displayName?: string;
-  /**
-   * Optional API key to use with the model. Defaults to the `XAI_API_KEY` environment variable.
-   */
-  token?:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * Optional base URL.
-   */
-  baseUrl?: string;
-  /**
-   * Optional temperature setting to use with the model.
-   */
-  temperature?: number;
-  headers?: LanguageModelHeaders;
-}
-export interface GitHubAppConfig {
-  /**
-   * GitHub App Configuration
-   */
-  type: "github";
-  /**
-   * The hostname of the GitHub App deployment.
-   */
-  deploymentHostname?: string;
-  /**
-   * The ID of the GitHub App.
-   */
-  id: string;
-  /**
-   * The private key of the GitHub App.
-   */
-  privateKey:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface GitHubIdentityProviderConfig {
-  provider: "github";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'GitHub'.
-   */
-  displayName?: string;
-  purpose: "sso" | "account_linking";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * The URL of the GitHub host. Defaults to https://github.com
-   */
-  baseUrl?: string;
-  accountLinkingRequired?: boolean;
-}
-export interface GitLabIdentityProviderConfig {
-  provider: "gitlab";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'GitLab'.
-   */
-  displayName?: string;
-  purpose: "sso" | "account_linking";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * The URL of the GitLab host. Defaults to https://gitlab.com
-   */
-  baseUrl?: string;
-  accountLinkingRequired?: boolean;
-}
-export interface GoogleIdentityProviderConfig {
-  provider: "google";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'Google'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface OktaIdentityProviderConfig {
-  provider: "okta";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'Okta'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  issuer:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface KeycloakIdentityProviderConfig {
-  provider: "keycloak";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'Keycloak'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  issuer:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface MicrosoftEntraIDIdentityProviderConfig {
-  provider: "microsoft-entra-id";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'Microsoft Entra ID'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  issuer:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface GCPIAPIdentityProviderConfig {
-  provider: "gcp-iap";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'Google Cloud IAP'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  audience:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface AuthentikIdentityProviderConfig {
-  provider: "authentik";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'Authentik'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  issuer:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface BitbucketCloudIdentityProviderConfig {
-  provider: "bitbucket-cloud";
-  /**
-   * Optional human-readable label shown on the login screen and account settings. Defaults to 'Bitbucket Cloud'.
-   */
-  displayName?: string;
-  purpose: "sso" | "account_linking";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  accountLinkingRequired?: boolean;
-}
-export interface JumpCloudIdentityProviderConfig {
-  provider: "jumpcloud";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'JumpCloud'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  issuer:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface IdiraIdentityProviderConfig {
-  provider: "idira";
-  /**
-   * Optional human-readable label shown on the login screen. Defaults to 'Idira'.
-   */
-  displayName?: string;
-  purpose: "sso";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  issuer:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-}
-export interface BitbucketServerIdentityProviderConfig {
-  provider: "bitbucket-server";
-  /**
-   * Optional human-readable label shown on the login screen and account settings. Defaults to 'Bitbucket Server'.
-   */
-  displayName?: string;
-  purpose: "sso" | "account_linking";
-  clientId:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  clientSecret:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
-  /**
-   * The URL of the Bitbucket Server/Data Center host.
-   */
-  baseUrl: string;
-  accountLinkingRequired?: boolean;
 }

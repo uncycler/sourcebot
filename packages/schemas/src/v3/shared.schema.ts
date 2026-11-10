@@ -4,34 +4,17 @@ const schema = {
   "type": "object",
   "definitions": {
     "Token": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "env": {
-              "type": "string",
-              "description": "The name of the environment variable that contains the token."
-            }
-          },
-          "required": [
-            "env"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "googleCloudSecret": {
-              "type": "string",
-              "description": "The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets"
-            }
-          },
-          "required": [
-            "googleCloudSecret"
-          ],
-          "additionalProperties": false
+      "type": "object",
+      "properties": {
+        "env": {
+          "type": "string",
+          "description": "The name of the environment variable that contains the token."
         }
-      ]
+      },
+      "required": [
+        "env"
+      ],
+      "additionalProperties": false
     },
     "GitRevisions": {
       "type": "object",
@@ -70,94 +53,6 @@ const schema = {
             ]
           ],
           "default": []
-        }
-      },
-      "additionalProperties": false
-    },
-    "LanguageModelHeaders": {
-      "type": "object",
-      "description": "Optional headers to use with the model.",
-      "patternProperties": {
-        "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "env": {
-                      "type": "string",
-                      "description": "The name of the environment variable that contains the token."
-                    }
-                  },
-                  "required": [
-                    "env"
-                  ],
-                  "additionalProperties": false
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "googleCloudSecret": {
-                      "type": "string",
-                      "description": "The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets"
-                    }
-                  },
-                  "required": [
-                    "googleCloudSecret"
-                  ],
-                  "additionalProperties": false
-                }
-              ]
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "LanguageModelQueryParams": {
-      "type": "object",
-      "description": "Optional query parameters to include in the request url.",
-      "patternProperties": {
-        "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "env": {
-                      "type": "string",
-                      "description": "The name of the environment variable that contains the token."
-                    }
-                  },
-                  "required": [
-                    "env"
-                  ],
-                  "additionalProperties": false
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "googleCloudSecret": {
-                      "type": "string",
-                      "description": "The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets"
-                    }
-                  },
-                  "required": [
-                    "googleCloudSecret"
-                  ],
-                  "additionalProperties": false
-                }
-              ]
-            }
-          ]
         }
       },
       "additionalProperties": false

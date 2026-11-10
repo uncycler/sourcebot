@@ -49,7 +49,6 @@ export type Member = {
     role: OrgRole;
     joinedAt: Date;
     suspendedAt?: Date | null;
-    scimManaged: boolean;
     lastActiveAt?: Date | null;
 };
 
@@ -385,8 +384,6 @@ interface MembersTableProps {
     searchQuery: string;
     onClearFilters: () => void;
     currentUserId: string;
-    hasOrgManagement: boolean;
-    scimEnabled: boolean;
 }
 
 export const MembersTable = ({
@@ -397,8 +394,6 @@ export const MembersTable = ({
     searchQuery,
     onClearFilters,
     currentUserId,
-    hasOrgManagement,
-    scimEnabled,
 }: MembersTableProps) => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const scrollTopBeforeSortRef = useRef<number | null>(null);
@@ -436,9 +431,7 @@ export const MembersTable = ({
     const columns = useMemo(() => getColumns({
         currentUserId,
         activeOwnerCount,
-        hasOrgManagement,
-        scimEnabled,
-    }), [activeOwnerCount, currentUserId, hasOrgManagement, scimEnabled]);
+        }), [activeOwnerCount, currentUserId]);
 
     const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
         scrollTopBeforeSortRef.current = scrollContainerRef.current?.scrollTop ?? null;

@@ -5,10 +5,6 @@ import { Logger } from 'winston';
 import { RequestError } from '@octokit/request-error';
 import type { RepoWithConnections } from './types';
 
-vi.mock('@sentry/node', () => ({
-    captureException: vi.fn(),
-}));
-
 const createMockLogger = (): Logger => ({
     warn: vi.fn(),
     error: vi.fn(),
@@ -17,28 +13,44 @@ const createMockLogger = (): Logger => ({
 } as unknown as Logger);
 
 describe('getAuthCredentialsForRepo', () => {
-    const originalAskGithubToken = env.EXPERIMENT_ASK_GH_GITHUB_TOKEN;
+    const azureDevOpsTokenEnvironment = 'SOURCEBOT_TEST_AZURE_DEVOPS_TOKEN';
 
     afterEach(() => {
-        env.EXPERIMENT_ASK_GH_GITHUB_TOKEN = originalAskGithubToken;
+        delete process.env[azureDevOpsTokenEnvironment];
     });
 
-    test('uses the Ask GitHub PAT before other GitHub credentials', async () => {
-        env.EXPERIMENT_ASK_GH_GITHUB_TOKEN = 'github-pat-token';
+    test('uses proactive Basic authentication for Azure DevOps Server', async () => {
+        const connectionConfig = {
+            type: 'azuredevops',
+            url: 'https://azure-devops.example.com',
+            deploymentType: 'server',
+            token: {
+                env: azureDevOpsTokenEnvironment,
+            },
+        } as const;
+        process.env[azureDevOpsTokenEnvironment] = 'azure-devops-test-token';
         const repo = {
-            displayName: 'codemirror/dev',
-            external_codeHostType: 'github',
-            external_codeHostUrl: 'https://github.com',
-            cloneUrl: 'https://github.com/codemirror/dev.git',
-            connections: [],
-        } as RepoWithConnections;
+            external_codeHostType: 'azuredevops',
+            cloneUrl: 'https://azure-devops.example.com/project/_git/repo',
+            connections: [{
+                connection: {
+                    connectionType: 'azuredevops',
+                    config: connectionConfig,
+                },
+            }],
+        } as unknown as RepoWithConnections;
 
         const credentials = await getAuthCredentialsForRepo(repo);
 
         expect(credentials).toEqual({
-            hostUrl: 'https://github.com',
-            token: 'github-pat-token',
-            cloneUrlWithToken: 'https://x-access-token:github-pat-token@github.com/codemirror/dev.git',
+            hostUrl: 'https://azure-devops.example.com',
+            token: 'azure-devops-test-token',
+            gitHttpCredentials: {
+                username: 'user',
+                password: 'azure-devops-test-token',
+                proactiveAuth: 'basic',
+            },
+            connectionConfig,
         });
     });
 });
@@ -317,7 +329,7 @@ describe('fetchWithRetry', () => {
 
         expect(logger.warn).toHaveBeenCalledTimes(1);
         expect(logger.warn).toHaveBeenCalledWith(
-            expect.stringContaining('test-identifier')
+            expect.stringContaining('test-identifier with status 429')
         );
     });
 });

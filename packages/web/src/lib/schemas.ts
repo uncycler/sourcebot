@@ -16,13 +16,6 @@ export const repositoryQuerySchema = z.object({
     isArchived: z.boolean(),
 });
 
-export const searchContextQuerySchema = z.object({
-    id: z.number(),
-    name: z.string(),
-    description: z.string().optional(),
-    repoNames: z.array(z.string()),
-});
-
 export const verifyCredentialsRequestSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
@@ -38,6 +31,8 @@ export const listReposQueryParamsSchema = z.object({
     sort: z.enum(['name', 'pushed']).default('name'),
     direction: z.enum(['asc', 'desc']).default('asc'),
     query: z.string().optional(),
+    connectionId: z.coerce.number().int().positive().optional()
+        .describe('Filter repositories to those associated with this connection ID. IDs are returned by GET /api/connections.'),
 });
 
 export const listReposResponseSchema = repositoryQuerySchema.array();

@@ -1,10 +1,6 @@
 import { __unsafePrisma } from "@/prisma";
-import { startServicePingCronJob, syncWithLighthouse } from '@/features/billing/servicePing';
-import { startChangelogPollingJob } from '@/features/changelog/pollChangelog';
 import { createLogger, env } from "@sourcebot/shared";
 import { SINGLE_TENANT_ORG_ID } from './lib/constants';
-import { warmModelCapabilitiesCatalog } from '@/features/chat/utils.server';
-import * as Sentry from '@sentry/nextjs';
 
 const logger = createLogger('web-initialize');
 
@@ -64,15 +60,4 @@ const syncDeprecatedEnvVars = async () => {
 
 export const initialize = async (): Promise<void> => {
     await syncDeprecatedEnvVars();
-
-    try {
-        await syncWithLighthouse(SINGLE_TENANT_ORG_ID);
-    } catch (error) {
-        logger.error(`Startup Lighthouse sync failed: ${error instanceof Error ? error.message : String(error)}`);
-        Sentry.captureException(error);
-    }
-
-    startServicePingCronJob();
-    startChangelogPollingJob();
-    warmModelCapabilitiesCatalog();
 };

@@ -11,13 +11,11 @@ import { StreamSearchResponse__Output as ZoektGrpcStreamSearchResponse } from "@
 import { WebserverServiceClient } from '@/proto/zoekt/webserver/v1/WebserverService';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
-import * as Sentry from '@sentry/nextjs';
 import { PrismaClient, Repo } from "@sourcebot/db";
 import { createLogger, env } from "@sourcebot/shared";
 import path from 'path';
 import { isBranchQuery, QueryIR, someInQueryIR } from './ir';
 import { RepositoryInfo, SearchResponse, SearchResultFile, SearchStats, SourceRange, StreamedSearchErrorResponse, StreamedSearchResponse } from "./types";
-import { captureEvent } from "@/lib/posthog";
 import { getBrowsePath } from "@/app/(app)/browse/hooks/utils";
 
 const logger = createLogger("zoekt-searcher");
@@ -28,7 +26,6 @@ const logger = createLogger("zoekt-searcher");
 export const createZoektSearchRequest = async ({
     query,
     options,
-    repoSearchScope,
 }: {
     query: QueryIR;
     options: {
@@ -36,8 +33,6 @@ export const createZoektSearchRequest = async ({
         contextLines?: number,
         whole?: boolean,
     };
-    // Allows the caller to scope the search to a specific set of repositories.
-    repoSearchScope?: string[];
 }) => {
     // Find if there are any `rev:` filters in the query.
     const containsRevExpression = someInQueryIR(query, (q) => isBranchQuery(q));
@@ -52,14 +47,6 @@ export const createZoektSearchRequest = async ({
                         branch: {
                             pattern: 'HEAD',
                             exact: true,
-                        }
-                    }] : []),
-                    ...(repoSearchScope ? [{
-                        repo_set: {
-                            set: repoSearchScope.reduce((acc, repo) => {
-                                acc[repo] = true;
-                                return acc;
-                            }, {} as Record<string, boolean>)
                         }
                     }] : []),
                 ]
@@ -121,30 +108,32 @@ export const zoektSearch = async (searchRequest: ZoektGrpcSearchRequest, prisma:
     const client = createGrpcClient();
     const metadata = new grpc.Metadata();
 
-    return new Promise((resolve, reject) => {
-        client.Search(searchRequest, metadata, (error, response) => {
-            if (error || !response) {
-                reject(new ServiceErrorException(unexpectedError(error?.details || 'No response received')))
-                return;
-            }
-
-            (async () => {
-                try {
-                    const reposMapCache = await createReposMapForChunk(response, new Map<string | number, Repo>(), prisma);
-                    const { stats, files, repositoryInfo } = await transformZoektSearchResponse(response, reposMapCache);
-
-                    resolve({
-                        stats,
-                        files,
-                        repositoryInfo,
-                        isSearchExhaustive: stats.totalMatchCount <= stats.actualMatchCount,
-                    } satisfies SearchResponse);
-                } catch (err) {
-                    reject(err);
+    try {
+        const response = await new Promise<ZoektGrpcSearchResponse>((resolve, reject) => {
+            client.Search(searchRequest, metadata, (error, response) => {
+                if (error || !response) {
+                    reject(new ServiceErrorException(unexpectedError(error?.details || 'No response received')))
+                    return;
                 }
-            })();
+
+                resolve(response);
+            });
         });
-    });
+
+        const reposMapCache = await createReposMapForChunk(response, new Map<string | number, Repo>(), prisma);
+        const { stats, files, repositoryInfo } = await transformZoektSearchResponse(response, reposMapCache);
+
+        return {
+            stats,
+            files,
+            repositoryInfo,
+            isSearchExhaustive: stats.totalMatchCount <= stats.actualMatchCount,
+        } satisfies SearchResponse;
+    } finally {
+        // grpc-js keeps each channel in its process-wide channelz registry until
+        // the owning client is explicitly closed.
+        client.close();
+    }
 }
 
 export const zoektStreamSearch = async (searchRequest: ZoektGrpcSearchRequest, prisma: PrismaClient): Promise<ReadableStream> => {
@@ -243,7 +232,6 @@ export const zoektStreamSearch = async (searchRequest: ZoektGrpcSearchRequest, p
                         controller.enqueue(encodeSSEREsponseChunk(response));
                     } catch (error) {
                         logger.error('Error processing chunk:', error);
-                        Sentry.captureException(error);
                         isStreamActive = false;
 
                         const errorMessage = error instanceof Error ? error.message : 'Unknown error processing chunk';
@@ -280,7 +268,6 @@ export const zoektStreamSearch = async (searchRequest: ZoektGrpcSearchRequest, p
                 // Handle errors
                 grpcStream.on('error', (error: grpc.ServiceError) => {
                     logger.error('gRPC stream error:', error);
-                    Sentry.captureException(error);
 
                     if (!isStreamActive) {
                         return;
@@ -299,7 +286,6 @@ export const zoektStreamSearch = async (searchRequest: ZoektGrpcSearchRequest, p
                 });
             } catch (error) {
                 logger.error('Stream initialization error:', error);
-                Sentry.captureException(error);
 
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                 const errorResponse: StreamedSearchErrorResponse = {
@@ -392,8 +378,6 @@ const transformZoektSearchResponse = async (response: ZoektGrpcSearchResponse, r
             const errorMessage = `Unable to find repository "${file.repository}" in database for file "${file.file_name}". This can happen when a search shard exists for a repository that does not exist in the database. See https://github.com/sourcebot-dev/sourcebot/issues/669 for more details. Skipping file...`;
 
             logger.error(errorMessage);
-            Sentry.captureMessage(errorMessage);
-            captureEvent('wa_repo_not_found_for_zoekt_file', {});
 
             return undefined;
         }

@@ -3,12 +3,10 @@ import { Metadata } from "next"
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isServiceError } from "@/lib/utils";
-import { getConnectionStats } from "@/actions";
 import { getOrgAccountRequests } from "@/features/membership/actions";
 import { ServiceErrorException } from "@/lib/serviceError";
 import { OrgRole } from "@prisma/client";
 import { env } from "@sourcebot/shared";
-import { hasEntitlement } from "@/lib/entitlements";
 import { withAuth } from "@/middleware/withAuth";
 import { NavGroup } from "../@sidebar/components/settingsSidebar/nav";
 
@@ -48,12 +46,6 @@ export const getSidebarNavGroups = async () =>
             numJoinRequests = requests.length;
         }
 
-        const connectionStats = await getConnectionStats();
-        if (isServiceError(connectionStats)) {
-            throw new ServiceErrorException(connectionStats);
-        }
-        const hasAskEntitlement = await hasEntitlement("ask");
-
         const groups: NavGroup[] = [
             {
                 label: "Account",
@@ -68,33 +60,6 @@ export const getSidebarNavGroups = async () =>
                             title: "API Keys",
                             href: `/settings/apiKeys`,
                             icon: "key-round" as const,
-                        }
-                    ] : []),
-                    ...(await hasEntitlement("sso") ? [
-                        {
-                            title: "Linked Accounts",
-                            href: `/settings/linked-accounts`,
-                            icon: "link" as const,
-                        }
-                    ] : []),
-                    {
-                        title: "MCP Server",
-                        href: `/settings/mcp`,
-                        icon: 'mcp' as const,
-                        requiredEntitlement: 'mcp',
-                    },
-                    ...(hasAskEntitlement ? [
-                        {
-                            title: "Ask Sourcebot",
-                            href: `/settings/accountAskAgent`,
-                            hrefRegex: `/settings/accountAskAgent(/.*)?$`,
-                            icon: "bot" as const,
-                        },
-                        {
-                            title: "Skills",
-                            href: `/settings/skills`,
-                            hrefRegex: `/settings/skills(/.*)?$`,
-                            icon: "sparkles" as const,
                         }
                     ] : []),
                 ],
@@ -120,25 +85,7 @@ export const getSidebarNavGroups = async () =>
                         title: "Connections",
                         href: `/settings/connections`,
                         hrefRegex: `/settings/connections(/[^/]+)?$`,
-                        isNotificationDotVisible: connectionStats.numberOfConnectionsWithFirstTimeSyncJobsInProgress > 0,
                         icon: "plug" as const,
-                    },
-                    {
-                        title: "Analytics",
-                        href: `/settings/analytics`,
-                        icon: "chart-area" as const,
-                        requiredEntitlement: 'analytics'
-                    },
-                    {
-                        title: "Ask Sourcebot",
-                        href: `/settings/workspaceAskAgent`,
-                        icon: "bot" as const,
-                        requiredEntitlement: 'ask',
-                    },
-                    {
-                        title: "License",
-                        href: `/settings/license`,
-                        icon: "scroll-text" as const,
                     },
                 ],
             });

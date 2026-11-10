@@ -9,7 +9,6 @@ import { ResizablePanel } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import useCaptureEvent from "@/hooks/useCaptureEvent";
 import { measure, unwrapServiceError } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { SearchIcon } from "lucide-react";
@@ -41,7 +40,6 @@ export const FileTreePanel = ({ order }: FileTreePanelProps) => {
 
     const { repoName, revisionName, path, pathType } = useBrowseParams();
     const [openPaths, setOpenPaths] = useState<Set<string>>(new Set());
-    const captureEvent = useCaptureEvent();
 
     const fileTreePanelRef = useRef<ImperativePanelHandle>(null);
 
@@ -56,9 +54,6 @@ export const FileTreePanel = ({ order }: FileTreePanelProps) => {
                 })
             ), 'getTree');
 
-            captureEvent('wa_file_tree_loaded', {
-                durationMs: result.durationMs,
-            });
 
             return result.data;
         },

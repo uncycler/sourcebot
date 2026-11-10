@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 // Hoist the mock function so it can be referenced in both the vi.mock factory
-// and the test body. The SUT imports simpleGit as a default export; the factory
-// maps both default and named exports to the same fn so both resolve identically.
+// and the test body.
 const mockSimpleGit = vi.hoisted(() => vi.fn());
 
 vi.mock('simple-git', () => ({
-    default: mockSimpleGit,
     simpleGit: mockSimpleGit,
 }));
 vi.mock('@sourcebot/shared', () => ({
@@ -58,10 +56,6 @@ vi.mock('@/middleware/sew', () => ({
 vi.mock('@/middleware/withAuth', () => ({
     withOptionalAuth: vi.fn(),
 }));
-vi.mock('@/ee/features/audit/audit', () => ({
-    createAudit: vi.fn(),
-}));
-
 import { getFileSourceForRepo } from './getFileSourceApi';
 
 const MOCK_ORG = { id: 1, name: 'test-org' } as Parameters<typeof getFileSourceForRepo>[1]['org'];
@@ -83,7 +77,7 @@ describe('getFileSourceForRepo', () => {
 
     const mockPrisma = {
         repo: { findFirst: mockFindFirst },
-    } as Parameters<typeof getFileSourceForRepo>[1]['prisma'];
+    } as unknown as Parameters<typeof getFileSourceForRepo>[1]['prisma'];
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -194,8 +188,7 @@ describe('getFileSourceForRepo', () => {
         });
 
         it('returns INVALID_GIT_REF with an unresolved-ref message when head_sha has not been fetched ("unknown revision")', async () => {
-            // This is the scenario from the v4.16.14 regression: the review agent passes
-            // pr_payload.head_sha as ref, but the bare clone hasn't fetched it yet.
+            // The ref points at a commit the bare clone hasn't fetched yet.
             mockGitRaw.mockRejectedValueOnce(
                 new Error("fatal: ambiguous argument 'deadbeef': unknown revision or path not in the working tree"),
             );

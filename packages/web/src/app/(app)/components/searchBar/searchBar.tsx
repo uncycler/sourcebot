@@ -43,12 +43,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Toggle } from "@/components/ui/toggle";
 import tailwind from "@/tailwind";
 import React from "react";
-import Link from "next/link";
-import { CaseSensitiveIcon, RegexIcon, Wand2Icon } from "lucide-react";
-import { SearchAssistBox } from "./searchAssistBox";
-import useCaptureEvent from "@/hooks/useCaptureEvent";
-
-const LANGUAGE_MODEL_DOCS_URL = "https://docs.sourcebot.dev/docs/configuration/language-model-providers"; 
+import { CaseSensitiveIcon, RegexIcon } from "lucide-react";
 
 interface SearchBarProps {
     className?: string;
@@ -59,7 +54,6 @@ interface SearchBarProps {
         query?: string;
     }
     autoFocus?: boolean;
-    isSearchAssistSupported: boolean;
 }
 
 const searchBarKeymap: readonly KeyBinding[] = ([
@@ -106,16 +100,13 @@ export const SearchBar = ({
         isCaseSensitivityEnabled: defaultIsCaseSensitivityEnabled = false,
         query: defaultQuery = "",
     } = {},
-    isSearchAssistSupported,
 }: SearchBarProps) => {
     const router = useRouter();
-    const captureEvent = useCaptureEvent();
     const suggestionBoxRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<ReactCodeMirrorRef>(null);
     const [cursorPosition, setCursorPosition] = useState(0);
-    const [activePanel, setActivePanel] = useState<'suggestions' | 'searchAssist'>();
+    const [activePanel, setActivePanel] = useState<'suggestions'>();
     const isSuggestionsEnabled = activePanel === 'suggestions';
-    const isSearchAssistEnabled = activePanel === 'searchAssist';
     const [isSuggestionsBoxFocused, setIsSuggestionsBoxFocused] = useState(false);
     const [isHistorySearchEnabled, setIsHistorySearchEnabled] = useState(false);
     const [isRegexEnabled, setIsRegexEnabled] = useState(defaultIsRegexEnabled);
@@ -230,8 +221,13 @@ export const SearchBar = ({
             [SearchQueryParams.isRegexEnabled, isRegexEnabled ? "true" : null],
             [SearchQueryParams.isCaseSensitivityEnabled, isCaseSensitivityEnabled ? "true" : null],
         );
+
         router.push(url);
-    }, [router, isRegexEnabled, isCaseSensitivityEnabled]);
+    }, [
+        isCaseSensitivityEnabled,
+        isRegexEnabled,
+        router,
+    ]);
 
     return (
         <div
@@ -239,10 +235,8 @@ export const SearchBar = ({
             onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (activePanel !== 'searchAssist') {
-                        setActivePanel(undefined);
-                        onSubmit(query);
-                    }
+                    setActivePanel(undefined);
+                    onSubmit(query);
                 }
 
                 if (e.key === 'Escape') {
@@ -250,7 +244,7 @@ export const SearchBar = ({
                     setActivePanel(undefined);
                 }
 
-                if (e.key === 'ArrowDown' && !isSearchAssistEnabled) {
+                if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     setActivePanel('suggestions');
                     focusSuggestionsBox();
@@ -272,33 +266,6 @@ export const SearchBar = ({
                     }}
                     tooltip="Search history"
                     icon={CounterClockwiseClockIcon}
-                />
-                <SearchBarButton
-                    isToggled={isSearchAssistEnabled}
-                    onClick={() => {
-                        setQuery("");
-                        setIsHistorySearchEnabled(false);
-                        setActivePanel(prev => {
-                            const next = prev === 'searchAssist' ? undefined : 'searchAssist';
-                            if (next === 'searchAssist') {
-                                captureEvent('wa_search_assist_opened', {});
-                            }
-                            return next;
-                        });
-                        focusEditor();
-                    }}
-                    tooltip="AI search assist"
-                    icon={Wand2Icon}
-                    preventBlurOnClick
-                    disabled={!isSearchAssistSupported}
-                    disabledTooltip={
-                        <span>
-                            AI search assist requires a language model to be configured.{" "}
-                            <Link href={LANGUAGE_MODEL_DOCS_URL} target="_blank" className="underline">
-                                Learn more
-                            </Link>.
-                        </span>
-                    }
                 />
             </div>
             <Separator
@@ -338,25 +305,6 @@ export const SearchBar = ({
 
                 />
             </div>
-            <SearchAssistBox
-                className={size === "sm" ? "top-7" : "top-9"}
-                isEnabled={isSearchAssistEnabled}
-                onBlur={() => {
-                    setActivePanel(undefined);
-                }}
-                onQueryGenerated={(translatedQuery: string) => {
-                    setQuery(translatedQuery);
-                    editorRef.current?.view?.dispatch({
-                        changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: translatedQuery },
-                        selection: { anchor: translatedQuery.length },
-                    });
-                    setActivePanel(undefined);
-                    focusEditor();
-                    // Always enable regex and case sensitivity when using search assist.
-                    setIsRegexEnabled(true);
-                    setIsCaseSensitivityEnabled(true);
-                }}
-            />
             <SearchSuggestionsBox
                 ref={suggestionBoxRef}
                 className={size === "sm" ? "top-9" : "top-12"}

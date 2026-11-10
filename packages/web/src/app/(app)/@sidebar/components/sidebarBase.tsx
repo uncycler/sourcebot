@@ -39,14 +39,10 @@ import { Session } from "next-auth";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import posthog from "posthog-js";
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { KeyboardShortcutHint } from "@/app/components/keyboardShortcutHint";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { WhatsNewSidebarButton } from "./whatsNewSidebarButton";
-import { BookACallSidebarButton } from "./bookACallSidebarButton";
-import { UpgradeButton } from "./upgradeButton";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // Retains the sidebar's scroll position across route-driven remounts of the
@@ -58,11 +54,9 @@ interface SidebarBaseProps {
     collapsible?: "icon" | "offcanvas" | "none";
     headerContent: ReactNode;
     children: ReactNode;
-    isValidLicenseActive: boolean;
-    isAskGhEnabled: boolean;
 }
 
-export function SidebarBase({ session, collapsible = "icon", headerContent, children, isValidLicenseActive, isAskGhEnabled }: SidebarBaseProps) {
+export function SidebarBase({ session, collapsible = "icon", headerContent, children }: SidebarBaseProps) {
     const [isScrolled, setIsScrolled] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
@@ -114,13 +108,10 @@ export function SidebarBase({ session, collapsible = "icon", headerContent, chil
                     {children}
                 </SidebarContent>
                 <SidebarFooter className="border-t border-sidebar-border">
-                    {!isValidLicenseActive && <UpgradeButton />}
                     {
                         (collapsible !== "none" && !isMobile) &&
                         <CollapseSidebarButton />
                     }
-                    <WhatsNewSidebarButton />
-                    <BookACallSidebarButton isAskGhEnabled={isAskGhEnabled} />
                     {session ? (
                         <MeControlDropdownMenu session={session} />
                     ) : (
@@ -245,7 +236,6 @@ const MeControlDropdownMenu = ({
                                     signOut({
                                         redirectTo: "/login",
                                     }).then(() => {
-                                        posthog.reset();
                                     })
                                 }}
                             >

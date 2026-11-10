@@ -1,38 +1,14 @@
-// types prefixed with _ are intended to be wrapped
-// by the consumer. See web/entitlements.ts and
-// backend/entitlements.ts
-export {
-    hasEntitlement as _hasEntitlement,
-    getEntitlements as _getEntitlements,
-    isAnonymousAccessAvailable as _isAnonymousAccessAvailable,
-    isValidLicenseActive as _isValidLicenseActive,
-    isValidOfflineLicenseActive,
-    isValidOnlineLicenseActive as _isValidOnlineLicenseActive,
-    getSeatCap,
-    getOfflineLicenseMetadata,
-    STALE_ONLINE_LICENSE_THRESHOLD_MS,
-    STALE_ONLINE_LICENSE_WARNING_THRESHOLD_MS,
-    verifyOnlineLicenseAssertion,
-} from "./entitlements.js";
-export type {
-    Entitlement,
-    OfflineLicenseMetadata,
-} from "./entitlements.js";
-export * from './lighthouseTypes.js';
 export type {
     RepoMetadata,
-    RepoIndexingJobMetadata,
-    IdentityProviderType,
-    LicenseStatus,
 } from "./types.js";
 export {
     repoMetadataSchema,
-    repoIndexingJobMetadataSchema,
 } from "./types.js";
 export {
     base64Decode,
     loadJsonFile,
     getConfigSettings,
+    resolveConfigSettings,
     getRepoPath,
     getRepoIdFromPath,
     isCredentialsLoginEnabled,
@@ -43,8 +19,6 @@ export * from "./constants.js";
 export {
     resolveEnvironmentVariableOverridesFromConfig,
     loadConfig,
-    getIdentityProviderConfigs,
-    getIdentityProviderConfig,
     isRemotePath,
 } from "./env.server.js";
 export { env } from "./env.server.js"
@@ -60,14 +34,6 @@ export {
     decrypt,
     hashSecret,
     generateApiKey,
-    generateScimToken,
-    generateOAuthToken,
-    generateOAuthRefreshToken,
-    verifySignature,
-    encryptOAuthToken,
-    decryptOAuthToken,
-    encryptActivationCode,
-    decryptActivationCode,
 } from "./crypto.js";
 export {
     getDBConnectionString,
@@ -79,13 +45,6 @@ export {
     createRedisClient,
 } from "./redis.js";
 export {
-    getStorageBackend,
-    LocalFsStorageBackend,
-} from "./storage.js";
-export type {
-    StorageBackend,
-} from "./storage.js";
-export {
     SOURCEBOT_VERSION,
 } from "./version.js";
 export {
@@ -94,3 +53,67 @@ export {
     compareVersions,
 } from "./versionUtils.js";
 export type { Version } from "./versionUtils.js";
+export {
+    connectionSyncResultSchema,
+} from "./connectionSync.js";
+export type { ConnectionSyncResult } from "./connectionSync.js";
+export {
+    repositoryDiscoveryIssueCodeSchema,
+    repositoryDiscoveryIssueEffectSchema,
+    repositoryDiscoveryIssueSchema,
+    repositoryDiscoveryIssueSubjectSchema,
+} from "./repositoryDiscovery.js";
+export type {
+    RepositoryDiscoveryIssue,
+    RepositoryDiscoveryIssueCode,
+    RepositoryDiscoveryIssueEffect,
+    RepositoryDiscoveryIssueSubject,
+} from "./repositoryDiscovery.js";
+export type {
+    QueueName,
+    DataOf,
+    ResultOf,
+    JobEnqueueOptions,
+    QueueSpec,
+    JobOptions,
+} from "./queue.js";
+export {
+    CONNECTION_QUEUE,
+    DEFAULT_JOB_OPTIONS,
+    JOB_PRIORITIES,
+    QUEUE_SPECS,
+    REPO_CLEANUP_QUEUE,
+    REPO_INDEX_QUEUE,
+} from "./queue.js";
+export type { Schedule } from "./schedule.js";
+export {
+    scheduleToMs,
+} from "./schedule.js";
+export {
+    BullMQClient,
+} from "./bullmqClient.js";
+export type {
+    WorkloadJob,
+    WorkloadJobStatus,
+} from "./bullmqClient.js";
+export {
+    createBullMQJobLogSink,
+    DEFAULT_JOB_LOGS_MAX_ENTRIES,
+    parseJobLogEntry,
+    readBullMQJobLogs,
+} from "./jobLogger.js";
+export type {
+    GetJobLogsOptions,
+    JobLogEntry,
+    JobLogFields,
+    JobLogLevel,
+    JobLogs,
+    JobLogSink,
+} from "./jobLogger.js";
+export {
+    getJobLogContext,
+    runWithJobLogContext,
+} from "./jobLogContext.js";
+export type {
+    JobLogContext,
+} from "./jobLogContext.js";

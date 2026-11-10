@@ -7,8 +7,7 @@ export interface IdentityProviderMetadata {
     type: string;
     /** Optional admin-supplied display name from config; overrides type-derived defaults in the UI. */
     displayName?: string;
-    purpose: "sso" | "account_linking";
-    required: boolean;
+    purpose: "sso";
 }
 
 export const getIdentityProviderMetadata = async (): Promise<IdentityProviderMetadata[]> => {
@@ -19,7 +18,6 @@ export const getIdentityProviderMetadata = async (): Promise<IdentityProviderMet
             type: provider.type,
             displayName: provider.displayName,
             purpose: provider.purpose,
-            required: provider.required ?? false,
         };
     });
 };

@@ -9,15 +9,13 @@ import { useToast } from "@/components/hooks/use-toast"
 import { setInviteLinkEnabled } from "@/app/(app)/settings/security/actions"
 import { cn, isServiceError } from "@/lib/utils"
 import { BasicSettingsCard } from "@/app/(app)/settings/components/settingsCard"
-import { ManagedByScimBadge } from "@/features/membership/components/managedByScimBadge"
 
 interface InviteLinkEnabledSettingsCardProps {
     inviteLinkEnabled: boolean
     inviteLink: string | null
-    scimManaged?: boolean
 }
 
-export function InviteLinkEnabledSettingsCard({ inviteLinkEnabled, inviteLink, scimManaged = false }: InviteLinkEnabledSettingsCardProps) {
+export function InviteLinkEnabledSettingsCard({ inviteLinkEnabled, inviteLink }: InviteLinkEnabledSettingsCardProps) {
     const [enabled, setEnabled] = useState(inviteLinkEnabled)
     const [isLoading, setIsLoading] = useState(false)
     const [copied, setCopied] = useState(false)
@@ -72,8 +70,7 @@ export function InviteLinkEnabledSettingsCard({ inviteLinkEnabled, inviteLink, s
         <BasicSettingsCard
             name="Enable invite links"
             description="When enabled, team members can use the invite link to join your organization without requiring approval."
-            badge={scimManaged ? <ManagedByScimBadge tooltip="Members are provisioned through your identity provider, so this setting has no effect while SCIM is enabled." /> : undefined}
-            footer={scimManaged ? undefined : (
+            footer={(
                 <div className={cn(
                     "transition-all duration-300 ease-in-out",
                     enabled
@@ -111,7 +108,7 @@ export function InviteLinkEnabledSettingsCard({ inviteLinkEnabled, inviteLink, s
             <Switch
                 checked={enabled}
                 onCheckedChange={handleToggle}
-                disabled={isLoading || scimManaged}
+                disabled={isLoading}
             />
         </BasicSettingsCard>
     )

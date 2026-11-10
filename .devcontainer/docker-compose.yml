@@ -4,7 +4,7 @@ services:
   devcontainer:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.noci
     volumes:
       - ..:/workspaces/sourcebot:cached
       - go-modules:/home/node/go
@@ -23,16 +23,12 @@ services:
       SOURCEBOT_ENCRYPTION_KEY: "00000000000000000000000000000000"
       NODE_ENV: development
       SOURCEBOT_LOG_LEVEL: debug
-      SOURCEBOT_TELEMETRY_DISABLED: "true"
-      REVIEW_AGENT_LOGGING_ENABLED: "true"
-      REVIEW_AGENT_AUTO_REVIEW_ENABLED: "false"
-      REVIEW_AGENT_REVIEW_COMMAND: review
     depends_on:
       - postgres
       - redis
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
@@ -42,7 +38,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:7b1753b4c5ad8458906c272a8132b8c15f5557b000379eb115fb239706a384b7
     volumes:
       - redis-data:/data
     restart: unless-stopped

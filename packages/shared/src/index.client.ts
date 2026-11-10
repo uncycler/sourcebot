@@ -11,4 +11,3 @@ export {
     compareVersions,
 } from "./versionUtils.js";
 export type { Version } from "./versionUtils.js";
-export * from './lighthouseTypes.js';

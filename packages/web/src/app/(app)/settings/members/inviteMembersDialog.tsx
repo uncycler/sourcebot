@@ -20,7 +20,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/hooks/use-toast";
 import { createInvites } from "@/features/membership/actions";
 import { isServiceError } from "@/lib/utils";
-import useCaptureEvent from "@/hooks/useCaptureEvent";
 
 interface InviteMembersDialogProps {
     className?: string;
@@ -74,7 +73,6 @@ export const InviteMembersDialog = ({ className }: InviteMembersDialogProps) => 
     const emailsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const router = useRouter();
     const { toast } = useToast();
-    const captureEvent = useCaptureEvent();
     const form = useForm<InviteMembersFormValues>({
         resolver: zodResolver(inviteMembersFormSchema),
         defaultValues: {
@@ -112,9 +110,6 @@ export const InviteMembersDialog = ({ className }: InviteMembersDialogProps) => 
         }
 
         if (!nextOpen && emailsValue.trim().length > 0) {
-            captureEvent("wa_invite_member_card_invite_cancel", {
-                num_emails: emails.length,
-            });
         }
 
         if (!nextOpen) {
@@ -137,17 +132,10 @@ export const InviteMembersDialog = ({ className }: InviteMembersDialogProps) => 
                 });
                 setShouldFocusEmails(true);
                 toast({ description: `Failed to send invites. Reason: ${result.message}` });
-                captureEvent("wa_invite_member_card_invite_fail", {
-                    errorCode: result.errorCode,
-                    num_emails: emails.length,
-                });
                 return;
             }
 
             toast({ description: `Successfully sent ${emails.length} invite${emails.length === 1 ? "" : "s"}.` });
-            captureEvent("wa_invite_member_card_invite_success", {
-                num_emails: emails.length,
-            });
             form.reset();
             setOpen(false);
             router.refresh();

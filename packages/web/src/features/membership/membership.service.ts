@@ -1,26 +1,18 @@
 import 'server-only';
 
-import { createAudit } from "@/ee/features/audit/audit";
-import { type AuditActor } from "@/ee/features/audit/types";
-import { syncWithLighthouse } from "@/features/billing/servicePing";
-import { activeMembershipWhere, orgHasAvailability, pendingMembershipWhere } from "@/features/membership/utils";
+import { activeMembershipWhere, pendingMembershipWhere } from "@/features/membership/utils";
 import { notFound, type ServiceError } from "@/lib/serviceError";
-import { isServiceError } from "@/lib/utils";
 import { __unsafePrisma as prisma } from "@/prisma";
 import { OrgRole, Prisma, type UserToOrg } from "@sourcebot/db";
-import { lastOwnerDemoteError, lastOwnerError, memberNotActiveError, seatLimitReached } from "./errors";
+import { lastOwnerDemoteError, lastOwnerError, memberSuspendedError } from "./errors";
 
 export interface EnsureActiveMemberOptions {
-    actor: AuditActor;
     role: OrgRole;
-    scimExternalId?: string;
 }
 
 /**
- * Moves an unsuspended pending membership into the active seat set. This is the
- * auth-path admission gate for provisioned users: SCIM/group sync can create
- * pending memberships above the offline seat cap, but the first actual login
- * must reserve a seat before the user gets access.
+ * Moves an unsuspended pending membership into the active state on the user's
+ * first authenticated request.
  */
 export const activatePendingMembership = async (
     membership: UserToOrg,
@@ -29,46 +21,29 @@ export const activatePendingMembership = async (
         return null;
     }
 
-    const activated = await prisma.$transaction(async (tx) => {
-        if (!(await orgHasAvailability(membership.orgId, tx))) {
-            return seatLimitReached();
-        }
-
-        const result = await tx.userToOrg.updateMany({
-            where: {
-                orgId: membership.orgId,
-                userId: membership.userId,
-                ...pendingMembershipWhere(),
-            },
-            data: { lastActiveAt: new Date() },
-        });
-
-        return result.count === 1;
+    await prisma.userToOrg.updateMany({
+        where: {
+            orgId: membership.orgId,
+            userId: membership.userId,
+            ...pendingMembershipWhere(),
+        },
+        data: { lastActiveAt: new Date() },
     });
-
-    if (isServiceError(activated)) {
-        return activated;
-    }
-
-    if (activated) {
-        await syncWithLighthouse(membership.orgId).catch(() => { /* best effort */ });
-    }
 
     return null;
 };
 
 /**
  * Ensures the user has an unsuspended membership. Unsuspended: returned
- * unchanged. Suspended: reactivated (re-checks the seat cap). Otherwise: created.
- * `role` only applies on create. Enforces the seat cap and clears pending
- * invites / account requests for the user.
+ * unchanged. Suspended: reactivated. Otherwise: created. `role` only applies
+ * on create. Clears pending invites / account requests for the user.
  */
 export const ensureActiveMember = async (
     orgId: number,
     userId: string,
     options: EnsureActiveMemberOptions,
 ): Promise<UserToOrg | ServiceError> => {
-    const { actor, role, scimExternalId } = options;
+    const { role } = options;
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
         return notFound("User not found");
@@ -79,34 +54,18 @@ export const ensureActiveMember = async (
     });
 
     if (existing && existing.suspendedAt === null) {
-        // SCIM reprovisioning can refresh the IdP identifier even when the
-        // membership is already active, so persist a changed external ID.
-        if (scimExternalId && existing.scimExternalId !== scimExternalId) {
-            return setMembershipSuspended(orgId, userId, false, {
-                actor,
-                scimExternalId,
-            });
-        }
         return existing;
     }
     if (existing && existing.suspendedAt !== null) {
-        return setMembershipSuspended(orgId, userId, false, {
-            actor,
-            scimExternalId,
-        });
+        return setMembershipSuspended(orgId, userId, false);
     }
 
-    const membership = await prisma.$transaction(async (tx) => {
-        if (!(await orgHasAvailability(orgId, tx))) {
-            return seatLimitReached();
-        }
-
+    return prisma.$transaction(async (tx) => {
         const created = await tx.userToOrg.create({
             data: {
                 userId,
                 orgId,
                 role,
-                ...(scimExternalId ? { scimExternalId } : {}),
             },
         });
 
@@ -119,25 +78,9 @@ export const ensureActiveMember = async (
 
         return created;
     });
-
-    if (isServiceError(membership)) {
-        return membership;
-    }
-
-    await syncWithLighthouse(orgId).catch(() => { /* best effort */ });
-    await createAudit({
-        action: "org.member_added",
-        actor,
-        target: { id: userId, type: "user" },
-        orgId,
-    });
-
-    return membership;
 };
 
-
 export interface RemoveMemberOptions {
-    actor: AuditActor;
     reason?: "removed" | "left";
 }
 
@@ -148,9 +91,9 @@ export interface RemoveMemberOptions {
 export const removeMember = async (
     orgId: number,
     userId: string,
-    options: RemoveMemberOptions,
+    options: RemoveMemberOptions = {},
 ): Promise<ServiceError | null> => {
-    const { actor, reason = "removed" } = options;
+    const { reason = "removed" } = options;
 
     const result = await prisma.$transaction(async (tx) => {
         const target = await tx.userToOrg.findUnique({
@@ -160,7 +103,7 @@ export const removeMember = async (
             return notFound("Member not found in this organization");
         }
 
-        if (target.role === OrgRole.OWNER && target.suspendedAt === null) {
+        if (isActiveOwner(target)) {
             if ((await countActiveOwners(tx, orgId)) <= 1) {
                 return lastOwnerError(reason);
             }
@@ -175,39 +118,21 @@ export const removeMember = async (
         return null;
     });
 
-    if (!isServiceError(result)) {
-        await syncWithLighthouse(orgId).catch(() => { /* best effort */ });
-        await createAudit({
-            action: reason === "left" ? "org.member_left" : "org.member_removed",
-            actor,
-            target: { id: userId, type: "user" },
-            orgId,
-        });
-    }
-
     return result;
 };
 
-
-export interface SetMemberRoleOptions {
-    actor: AuditActor;
-}
-
 /**
- * Changes a member's role (no-op when unchanged). No session/token revocation:
- * role is resolved from the DB on every request, so a change takes effect on the
- * member's next request. Seats are unaffected, so no lighthouse sync.
+ * Changes a member's role (no-op when unchanged). Pending members can be
+ * promoted or demoted so an owner can be lined up before they first sign in;
+ * suspended members cannot. No session/token revocation: role is resolved from
+ * the DB on every request, so a change takes effect on the member's next
+ * request.
  */
 export const setMemberRole = async (
     orgId: number,
     userId: string,
     role: OrgRole,
-    options: SetMemberRoleOptions,
 ): Promise<ServiceError | null> => {
-    const { actor } = options;
-
-    let didChange = false;
-
     const result = await prisma.$transaction(async (tx) => {
         const target = await tx.userToOrg.findUnique({
             where: { orgId_userId: { orgId, userId } },
@@ -220,12 +145,12 @@ export const setMemberRole = async (
             return null;
         }
 
-        if (target.suspendedAt !== null || target.lastActiveAt === null) {
-            return memberNotActiveError();
+        if (target.suspendedAt !== null) {
+            return memberSuspendedError();
         }
 
         const isDemotionFromOwner = target.role === OrgRole.OWNER && role !== OrgRole.OWNER;
-        if (isDemotionFromOwner && target.suspendedAt === null) {
+        if (isDemotionFromOwner && isActiveOwner(target)) {
             if ((await countActiveOwners(tx, orgId)) <= 1) {
                 return lastOwnerDemoteError();
             }
@@ -235,43 +160,24 @@ export const setMemberRole = async (
             where: { orgId_userId: { orgId, userId } },
             data: { role },
         });
-        didChange = true;
 
         return null;
     });
 
-    if (!isServiceError(result) && didChange) {
-        await createAudit({
-            action: role === OrgRole.OWNER ? "org.member_promoted_to_owner" : "org.owner_demoted_to_member",
-            actor,
-            target: { id: userId, type: "user" },
-            orgId,
-        });
-    }
-
     return result;
 };
 
-export interface SetMembershipSuspendedOptions {
-    actor: AuditActor;
-    scimExternalId?: string;
-}
-
 /**
  * Suspends or restores a membership without deleting it. Suspension bumps
- * `sessionVersion` + revokes tokens; reactivation re-checks the seat cap. A
- * no-op when already in the requested state.
+ * `sessionVersion` + revokes tokens. A no-op when already in the requested
+ * state.
  */
 export const setMembershipSuspended = async (
     orgId: number,
     userId: string,
     suspended: boolean,
-    options: SetMembershipSuspendedOptions,
 ): Promise<ServiceError | UserToOrg> => {
-    const { actor, scimExternalId } = options;
-
     if (suspended) {
-        let didChange = false;
 
         const result = await prisma.$transaction(async (tx) => {
             let target = await tx.userToOrg.findUnique({
@@ -291,29 +197,17 @@ export const setMembershipSuspended = async (
                 data: {
                     suspendedAt: new Date(),
                     // @note: when a user is suspended, reset the lastActiveAt
-                    // s.t., if they are re-provisioned, they will be in the
+                    // s.t., if they are restored, they will be in the
                     // "pending" state rather than "active".
                     lastActiveAt: null,
                 },
             });
-            didChange = true;
             return target;
         });
-
-        if (!isServiceError(result) && didChange) {
-            await syncWithLighthouse(orgId).catch(() => { /* best effort */ });
-            await createAudit({
-                action: "org.member_deactivated",
-                actor,
-                target: { id: userId, type: "user" },
-                orgId,
-            });
-        }
 
         return result;
 
     } else {
-        let didChange = false;
 
         const result = await prisma.$transaction(async (tx) => {
             let target = await tx.userToOrg.findUnique({
@@ -324,43 +218,30 @@ export const setMembershipSuspended = async (
             }
 
             if (target.suspendedAt === null) {
-                if (scimExternalId && target.scimExternalId !== scimExternalId) {
-                    target = await tx.userToOrg.update({
-                        where: { orgId_userId: { orgId, userId } },
-                        data: { scimExternalId },
-                    });
-                }
                 return target;
-            }
-
-            if (!(await orgHasAvailability(orgId, tx))) {
-                return seatLimitReached();
             }
 
             target = await tx.userToOrg.update({
                 where: { orgId_userId: { orgId, userId } },
                 data: {
                     suspendedAt: null,
-                    ...(scimExternalId ? { scimExternalId } : {}),
                 },
             });
-            didChange = true;
             return target;
         });
-
-        if (!isServiceError(result) && didChange) {
-            await syncWithLighthouse(orgId).catch(() => { /* best effort */ });
-            await createAudit({
-                action: "org.member_reactivated",
-                actor,
-                target: { id: userId, type: "user" },
-                orgId,
-            });
-        }
 
         return result;
     }
 };
+
+// Pending owners have never signed in and are excluded from `countActiveOwners`,
+// so the last-owner guards only apply when the target itself is an active owner.
+// Otherwise removing or demoting a pending owner would be blocked by the actor's
+// own membership being the only active one counted.
+const isActiveOwner = (membership: UserToOrg): boolean =>
+    membership.role === OrgRole.OWNER
+    && membership.suspendedAt === null
+    && membership.lastActiveAt !== null;
 
 const countActiveOwners = (tx: Prisma.TransactionClient, orgId: number): Promise<number> =>
     tx.userToOrg.count({
@@ -387,23 +268,6 @@ const revokeAllUserAuthCredentials = async (
         where: {
             createdById: userId,
             orgId,
-        }
-    });
-
-    // OAuth tokens
-    await prisma.oAuthToken.deleteMany({
-        where: {
-            userId
-        }
-    });
-    await prisma.oAuthRefreshToken.deleteMany({
-        where: {
-            userId
-        }
-    });
-    await prisma.oAuthAuthorizationCode.deleteMany({
-        where: {
-            userId
         }
     });
 };

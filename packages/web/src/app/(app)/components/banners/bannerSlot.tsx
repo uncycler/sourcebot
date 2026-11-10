@@ -5,14 +5,12 @@ import { DISMISS_COOKIE_PREFIX, type BannerId } from "./types";
 type BannerSlotProps = Omit<BannerContext, 'dismissals' | 'today' | 'now'>;
 
 const KNOWN_BANNER_IDS: BannerId[] = [
-    'licenseExpired',
-    'licenseReboundElsewhere',
-    'invoicePastDue',
-    'permissionSync',
-    'licenseExpiryHeadsUp',
-    'trial',
-    'servicePingFailed',
-    'upgradeAvailable',
+    'connectionSyncFailed',
+    'connectionSyncWarning',
+    'connectionFirstSync',
+    'repositorySyncFailed',
+    'repositorySyncWarning',
+    'repositoryFirstSync',
 ];
 
 export async function BannerSlot(props: BannerSlotProps) {

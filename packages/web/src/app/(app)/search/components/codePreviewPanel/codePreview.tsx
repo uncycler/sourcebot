@@ -4,9 +4,6 @@ import { useBrowseNavigation } from "@/app/(app)/browse/hooks/useBrowseNavigatio
 import { EditorContextMenu } from "@/app/(app)/components/editorContextMenu";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SymbolHoverPopup } from "@/ee/features/codeNav/components/symbolHoverPopup";
-import { symbolHoverTargetsExtension } from "@/ee/features/codeNav/components/symbolHoverPopup/symbolHoverTargetsExtension";
-import { useHasEntitlement } from "@/features/entitlements/useHasEntitlement";
 import { SearchResultChunk } from "@/features/search";
 import { useCodeMirrorLanguageExtension } from "@/hooks/useCodeMirrorLanguageExtension";
 import { useCodeMirrorTheme } from "@/hooks/useCodeMirrorTheme";
@@ -47,7 +44,6 @@ export const CodePreview = ({
 }: CodePreviewProps) => {
     const [editorRef, setEditorRef] = useState<ReactCodeMirrorRef | null>(null);
     const { navigateToPath } = useBrowseNavigation();
-    const hasCodeNavEntitlement = useHasEntitlement("code-nav");
 
     const [gutterWidth, setGutterWidth] = useState(0);
     const theme = useCodeMirrorTheme();
@@ -80,9 +76,8 @@ export const CodePreview = ({
                     setCurrentSelection(update.state.selection.main);
                 }
             }),
-            hasCodeNavEntitlement ? symbolHoverTargetsExtension : [],
         ];
-    }, [hasCodeNavEntitlement, keymapExtension, languageExtension]);
+    }, [keymapExtension, languageExtension]);
 
     const ranges = useMemo(() => {
         if (!file.matches.length) {
@@ -204,16 +199,6 @@ export const CodePreview = ({
                         )
                     }
 
-                    {editorRef && hasCodeNavEntitlement && (
-                        <SymbolHoverPopup
-                            source="preview"
-                            editorRef={editorRef}
-                            language={file.language}
-                            revisionName={file.revision}
-                            fileName={file.filepath}
-                            repoName={repoName}
-                        />
-                    )}
                 </CodeMirror>
                 <Scrollbar orientation="vertical" />
                 <Scrollbar orientation="horizontal" />

@@ -31,14 +31,11 @@ import {
     removeMemberFromOrg,
     suspendMember,
 } from "@/features/membership/actions";
-import { demoteToMember, promoteToOwner } from "@/ee/features/membership/actions";
 import { type ServiceError } from "@/lib/serviceError";
 import { createPathWithQueryParams, isServiceError } from "@/lib/utils";
 import { type TableRowData } from "./membersTable";
 
 type MemberAction =
-    | "promote"
-    | "demote"
     | "suspend"
     | "reactivate"
     | "remove"
@@ -51,8 +48,6 @@ export interface MembersTableActionsProps {
     row: TableRowData;
     currentUserId: string;
     activeOwnerCount: number;
-    hasOrgManagement: boolean;
-    scimEnabled: boolean;
 }
 
 const getDisplayName = (row: TableRowData) => {
@@ -64,10 +59,6 @@ const getDisplayName = (row: TableRowData) => {
 
 const getActionLabel = (action: MemberAction) => {
     switch (action) {
-        case "promote":
-            return "Promote";
-        case "demote":
-            return "Demote";
         case "suspend":
             return "Suspend";
         case "reactivate":
@@ -89,16 +80,6 @@ const getDialogCopy = (action: MemberAction, row: TableRowData) => {
     const name = getDisplayName(row);
 
     switch (action) {
-        case "promote":
-            return {
-                title: "Promote to Owner",
-                description: `Are you sure you want to promote ${name} to owner? They will have full administrative access.`,
-            };
-        case "demote":
-            return {
-                title: "Demote to Member",
-                description: `Are you sure you want to demote ${name} from owner to member? They will lose administrative access.`,
-            };
         case "suspend":
             return {
                 title: "Suspend Member",
@@ -138,15 +119,13 @@ const getDialogCopy = (action: MemberAction, row: TableRowData) => {
 };
 
 const isDestructiveAction = (action: MemberAction) => {
-    return ["demote", "suspend", "remove", "leave", "cancelInvite", "rejectRequest"].includes(action);
+    return ["suspend", "remove", "leave", "cancelInvite", "rejectRequest"].includes(action);
 };
 
 export const MembersTableActions = ({
     row,
     currentUserId,
     activeOwnerCount,
-    hasOrgManagement,
-    scimEnabled,
 }: MembersTableActionsProps) => {
     const router = useRouter();
     const { toast } = useToast();
@@ -156,11 +135,9 @@ export const MembersTableActions = ({
     const isCurrentUser = row.kind === "member" && row.id === currentUserId;
     const isSuspended = row.kind === "member" && row.suspendedAt != null;
     const isActiveMember = row.kind === "member" && row.suspendedAt == null && row.lastActiveAt != null;
-    const isLastActiveOwner = row.kind === "member"
-        && !isSuspended
+    const isLastActiveOwner = isActiveMember
         && row.role === OrgRole.OWNER
         && activeOwnerCount <= 1;
-    const scimDisabledTitle = scimEnabled ? "SCIM provisioning is enabled" : undefined;
 
     const copyEmail = async () => {
         try {
@@ -216,10 +193,6 @@ export const MembersTableActions = ({
         try {
             result = await (async () => {
                 switch (action) {
-                    case "promote":
-                        return promoteToOwner(row.id);
-                    case "demote":
-                        return demoteToMember(row.id);
                     case "suspend":
                         return suspendMember(row.id);
                     case "reactivate":
@@ -292,8 +265,6 @@ export const MembersTableActions = ({
                         <>
                             <DropdownMenuItem
                                 className="cursor-pointer"
-                                disabled={scimEnabled}
-                                title={scimDisabledTitle}
                                 onClick={() => setConfirmingAction("approveRequest")}
                             >
                                 Approve request
@@ -308,38 +279,12 @@ export const MembersTableActions = ({
                     )}
                     {row.kind === "member" && (
                         <>
-                            {isActiveMember && row.role === OrgRole.MEMBER && (
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    disabled={!hasOrgManagement}
-                                    title={!hasOrgManagement ? "Organization management is not available in your current plan" : undefined}
-                                    onClick={() => setConfirmingAction("promote")}
-                                >
-                                    Promote to owner
-                                </DropdownMenuItem>
-                            )}
-                            {isActiveMember && row.role === OrgRole.OWNER && (
-                                <DropdownMenuItem
-                                    className="cursor-pointer text-destructive"
-                                    disabled={!hasOrgManagement || isLastActiveOwner}
-                                    title={
-                                        !hasOrgManagement
-                                            ? "Organization management is not available in your current plan"
-                                            : isLastActiveOwner
-                                                ? "Cannot demote the last active owner"
-                                                : undefined
-                                    }
-                                    onClick={() => setConfirmingAction("demote")}
-                                >
-                                    Demote to member
-                                </DropdownMenuItem>
-                            )}
                             {!isSuspended ? (
                                 isCurrentUser ? (
                                     <DropdownMenuItem
                                         className="cursor-pointer text-destructive"
-                                        disabled={scimEnabled || isLastActiveOwner}
-                                        title={scimDisabledTitle ?? (isLastActiveOwner ? "Cannot leave as the last active owner" : undefined)}
+                                        disabled={isLastActiveOwner}
+                                        title={isLastActiveOwner ? "Cannot leave as the last active owner" : undefined}
                                         onClick={() => setConfirmingAction("leave")}
                                     >
                                         Leave organization
@@ -347,8 +292,8 @@ export const MembersTableActions = ({
                                 ) : (
                                     <DropdownMenuItem
                                         className="cursor-pointer text-destructive"
-                                        disabled={scimEnabled || isLastActiveOwner}
-                                        title={scimDisabledTitle ?? (isLastActiveOwner ? "Cannot suspend the last active owner" : undefined)}
+                                        disabled={isLastActiveOwner}
+                                        title={isLastActiveOwner ? "Cannot suspend the last active owner" : undefined}
                                         onClick={() => setConfirmingAction("suspend")}
                                     >
                                         Suspend
@@ -358,16 +303,12 @@ export const MembersTableActions = ({
                                 <>
                                     <DropdownMenuItem
                                         className="cursor-pointer"
-                                        disabled={scimEnabled}
-                                        title={scimDisabledTitle}
                                         onClick={() => setConfirmingAction("reactivate")}
                                     >
                                         Reactivate
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         className="cursor-pointer text-destructive"
-                                        disabled={scimEnabled}
-                                        title={scimDisabledTitle}
                                         onClick={() => setConfirmingAction("remove")}
                                     >
                                         Remove

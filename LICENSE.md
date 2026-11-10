@@ -2,9 +2,8 @@ Copyright (c) 2026 Taqla Inc.
 
 Portions of this software are licensed as follows:
 
-- All content located within any folder or subfolder named “ee” in this repository is licensed under the terms specified in “ee/LICENSE”,
 - All third party components incorporated into the Sourcebot Software are licensed under the original license provided by the owner of the applicable component.
-- Content outside of the above mentioned directories or restrictions above is available under the "Functional Source License" as defined below.
+- All other content is available under the "Functional Source License" as defined below.
 
 ---
 

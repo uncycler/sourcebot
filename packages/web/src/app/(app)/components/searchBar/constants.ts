@@ -18,7 +18,6 @@ export enum SearchPrefix {
     archived = "archived:",
     fork = "fork:",
     visibility = "visibility:",
-    context = "context:",
 }
 
 export const visibilityModeSuggestions: Suggestion[] = [

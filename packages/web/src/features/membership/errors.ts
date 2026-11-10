@@ -3,12 +3,6 @@ import { ServiceError } from "@/lib/serviceError";
 import { StatusCodes } from "http-status-codes";
 
 
-export const seatLimitReached = (): ServiceError => ({
-    statusCode: StatusCodes.BAD_REQUEST,
-    errorCode: ErrorCode.ORG_SEAT_COUNT_REACHED,
-    message: "Organization is at max capacity",
-});
-
 export const lastOwnerError = (reason: "removed" | "left"): ServiceError => ({
     statusCode: StatusCodes.FORBIDDEN,
     errorCode: ErrorCode.LAST_OWNER_CANNOT_BE_REMOVED,
@@ -23,16 +17,8 @@ export const lastOwnerDemoteError = (): ServiceError => ({
     message: "Cannot demote the last owner. Promote another member to owner first.",
 });
 
-export const memberNotActiveError = (): ServiceError => ({
+export const memberSuspendedError = (): ServiceError => ({
     statusCode: StatusCodes.BAD_REQUEST,
-    errorCode: ErrorCode.MEMBER_NOT_ACTIVE,
-    message: "Only active members can be promoted or demoted.",
-});
-
-// When SCIM is enabled the IdP is the source of truth for membership, so paths
-// that would grant membership outside it (invites, join requests) are disabled.
-export const membershipManagedByIdpError = (): ServiceError => ({
-    statusCode: StatusCodes.FORBIDDEN,
-    errorCode: ErrorCode.MEMBERSHIP_MANAGED_BY_IDP,
-    message: "SCIM provisioning is enabled. Membership is managed through your identity provider.",
+    errorCode: ErrorCode.MEMBER_SUSPENDED,
+    message: "Suspended members cannot be promoted or demoted. Reactivate the member first.",
 });

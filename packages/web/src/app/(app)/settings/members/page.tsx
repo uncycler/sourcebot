@@ -4,16 +4,12 @@ import { getOrgMembers, getOrgInvites, getOrgAccountRequests } from "@/features/
 import { isServiceError } from "@/lib/utils";
 import { ServiceErrorException } from "@/lib/serviceError";
 import { MembersTableView } from "./membersTableView";
-import { isScimEnabled } from "@/features/scim/utils";
-import { hasEntitlement } from "@/lib/entitlements";
 
-export default authenticatedPage(async ({ org, user }) => {
-    const [members, invites, requests, scimEnabled, hasOrgManagement] = await Promise.all([
+export default authenticatedPage(async ({ user }) => {
+    const [members, invites, requests] = await Promise.all([
         getOrgMembers(),
         getOrgInvites(),
         getOrgAccountRequests(),
-        isScimEnabled(org),
-        hasEntitlement("org-management"),
     ]);
 
     if (isServiceError(members)) {
@@ -39,8 +35,6 @@ export default authenticatedPage(async ({ org, user }) => {
                 invites={invites}
                 requests={requests}
                 currentUserId={user.id}
-                hasOrgManagement={hasOrgManagement}
-                scimEnabled={scimEnabled}
             />
         </div>
     );

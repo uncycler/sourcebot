@@ -1,9 +1,6 @@
 'use client';
 
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SymbolHoverPopup } from "@/ee/features/codeNav/components/symbolHoverPopup";
-import { symbolHoverTargetsExtension } from "@/ee/features/codeNav/components/symbolHoverPopup/symbolHoverTargetsExtension";
-import { useHasEntitlement } from "@/features/entitlements/useHasEntitlement";
 import { useCodeMirrorLanguageExtension } from "@/hooks/useCodeMirrorLanguageExtension";
 import { useCodeMirrorTheme } from "@/hooks/useCodeMirrorTheme";
 import { useKeymapExtension } from "@/hooks/useKeymapExtension";
@@ -40,7 +37,6 @@ export const PureCodePreviewPanel = ({
     const languageExtension = useCodeMirrorLanguageExtension(language, editorRef?.view);
     const [currentSelection, setCurrentSelection] = useState<SelectionRange>();
     const keymapExtension = useKeymapExtension(editorRef?.view);
-    const hasCodeNavEntitlement = useHasEntitlement("code-nav");
     const router = useRouter();
 
     const handleBlameCommitClick = useCallback((commit: { hash: string; path: string }) => {
@@ -124,7 +120,6 @@ export const PureCodePreviewPanel = ({
                 }
             }),
             highlightRange ? rangeHighlightingExtension(highlightRange) : [],
-            hasCodeNavEntitlement ? symbolHoverTargetsExtension : [],
             blame ? blameGutterExtension(
                 blame,
                 handleBlameCommitClick,
@@ -135,7 +130,6 @@ export const PureCodePreviewPanel = ({
         keymapExtension,
         languageExtension,
         highlightRange,
-        hasCodeNavEntitlement,
         blame,
         handleBlameCommitClick,
         handleBlameReblameClick,
@@ -282,16 +276,6 @@ export const PureCodePreviewPanel = ({
                         repoName={repoName}
                         path={path}
                         revisionName={revisionName}
-                    />
-                )}
-                {editorRef && hasCodeNavEntitlement && (
-                    <SymbolHoverPopup
-                        source="preview"
-                        editorRef={editorRef}
-                        revisionName={revisionName}
-                        language={language}
-                        fileName={path}
-                        repoName={repoName}
                     />
                 )}
             </CodeMirror>

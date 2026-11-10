@@ -18,6 +18,27 @@ To build a specific package:
 yarn workspace @sourcebot/<package-name> build
 ```
 
+## Backend Workloads
+
+Use the workload system in `packages/backend` for background work. Define the queue payload and default job behavior in the shared queue registry, implement a `Workload`, and register it with the `JobManager`.
+
+### Execution locks
+
+- Key an execution lock by the logical resource being mutated, not by the job ID. Workloads that mutate the same resource must use the exact same lock key. For example, repo indexing and repo cleanup share the per-repo filesystem and search-index lock. Connection syncing uses its own per-connection lock.
+- An execution lock serializes work but does not deduplicate it. Multiple jobs for one resource may still be queued and will execute one at a time.
+- The lock lease is extended automatically while work is running. The workload's `AbortSignal` is aborted if extension fails or the worker shuts down.
+- Abortion is cooperative. Call `signal.throwIfAborted()` before side effects and after long-running or external operations so work stops promptly after losing the lock. The signal cannot cancel an operation that has already been submitted.
+- `onStarted` runs after the execution lock is acquired and immediately before `process`. `onCompleted` and `onTerminalFailure` are BullMQ event hooks and run after the processor has returned and released the lock.
+
+### Lifecycle state
+
+- BullMQ is the default source of truth for workload lifecycle state. Only persist a separate database job row when the product explicitly requires durable history beyond the queue's retention policy.
+- If a parent resource tracks a `latest...JobId`, update that pointer when the job starts so consumers can resolve its state from BullMQ.
+- For workloads that persist historical job rows, completion and terminal-failure hooks must always update their own row by job ID. Do not condition that update on the job still being latest. Every persisted job row should record its actual outcome.
+- `onTerminalFailure` only runs after the job exhausts all retry attempts. Intermediate failures are retried without marking the lifecycle row as terminally failed.
+- If a completion or failure hook publishes state onto the parent resource, use a conditional `updateMany` keyed by both the resource ID and its `latest...JobId`. This prevents an older hook from overwriting state belonging to a newer job after the execution lock has been released.
+- Parent-resource state written inside `process` is already serialized by the execution lock. It does not need a latest-job conditional merely because the resource tracks the latest job ID.
+
 ## File Naming
 
 Files should use camelCase starting with a lowercase letter:
@@ -35,7 +56,7 @@ share-chat-popover.tsx
 ```
 
 Exceptions:
-- Special files like `README.md`, `CHANGELOG.md`, `LICENSE`
+- Special files like `README.md`, `CONTRIBUTING.md`, `LICENSE.md`
 - Next.js conventions: `page.tsx`, `layout.tsx`, `loading.tsx`, etc.
 
 ## Code Style
@@ -56,12 +77,6 @@ if (!value) return;
 if (!value) { return; }
 if (condition) doSomething();
 ```
-
-## PostHog Event Naming
-
-- The `wa_` prefix is reserved for events that can ONLY be fired from the web app (e.g., `wa_login_with_github`, `wa_chat_feedback_submitted`).
-- Events fired from multiple sources (web app, MCP server, API) must NOT use the `wa_` prefix (e.g., `ask_message_sent`, `tool_used`).
-- Multi-source events should include a `source` property to identify the origin (e.g., `'sourcebot-web-client'`, `'sourcebot-mcp-server'`, `'sourcebot-ask-agent'`).
 
 ## Conditional ClassNames
 
@@ -218,7 +233,7 @@ Use `withAuth` or `withOptionalAuth` from `@/middleware/withAuth` to protect ser
 - **`withOptionalAuth`** - Allows anonymous access if the org has anonymous access enabled. `user` may be `undefined`.
 - **`withMinimumOrgRole`** - Wrap inside auth context to require a minimum role (e.g., `OrgRole.OWNER`). Import from `@/middleware/withMinimumOrgRole`.
 
-**Important:** Always use the `prisma` instance provided by the auth context. This instance has `userScopedPrismaClientExtension` applied, which enforces repository visibility rules (e.g., filtering repos based on user permissions). Do NOT import `prisma` directly from `@/prisma` in actions or routes that return data to the client.
+**Important:** Always use the `prisma` instance provided by the auth context. Do NOT import `prisma` directly from `@/prisma` in actions or routes that return data to the client; keeping data access behind the auth context is what lets scoping be added in one place.
 
 **Server actions** - Wrap with `sew()` for error handling:
 
@@ -269,11 +284,11 @@ export const GET = apiHandler(async (request: NextRequest) => {
 
 Organization membership state is derived from fields on `UserToOrg`:
 
-- **Active**: `suspendedAt` is `null` and `lastActiveAt` is not `null`. Active members can access the org and count as billable seats.
-- **Pending**: `suspendedAt` is `null` and `lastActiveAt` is `null`. Pending users can access the org, but are not billable yet.
-- **Suspended**: `suspendedAt` is not `null`. Suspended users cannot access the org and are not billable.
+- **Active**: `suspendedAt` is `null` and `lastActiveAt` is not `null`. Active members can access the org.
+- **Pending**: `suspendedAt` is `null` and `lastActiveAt` is `null`. Pending users can access the org but have not signed in yet.
+- **Suspended**: `suspendedAt` is not `null`. Suspended users cannot access the org.
 
-When filtering memberships, use the helper predicates from `packages/web/src/features/membership/utils.ts` instead of writing these conditions inline. This keeps auth, billing, SCIM, and UI queries aligned as the state rules evolve.
+When filtering memberships, use the helper predicates from `packages/web/src/features/membership/utils.ts` instead of writing these conditions inline. This keeps auth and UI queries aligned as the state rules evolve.
 
 ```ts
 import {
@@ -374,62 +389,39 @@ When fixing a CVE in a transitive dependency, prefer a real top-level upgrade ov
 Use a **package-keyed** branch name, not a CVE-keyed one:
 
 ```
-cursor/cve/<package>
+fix/cve-<package>
 ```
 
-Multiple CVEs against the same package commonly land in one upstream release, so package-keyed branches let sibling work join the same PR (see "Batching CVEs" below). Do not include the CVE ID or a Linear issue ID in the branch name.
+Multiple CVEs against the same package commonly land in one upstream release, so package-keyed branches let sibling work join the same merge request (see "Batching CVEs" below). Do not include the CVE ID in the branch name.
 
 ### Batching CVEs that share a package
 
-CVEs often arrive in clusters because one package release fixes several at once. Before opening a new PR, check whether a sibling PR is already addressing the same package.
+CVEs often arrive in clusters because one package release fixes several at once. Before opening a new merge request, check whether an open one already addresses the same package:
 
-1. **Extract** `<package>` and `<min-patched-version>` from the Linear issue (the Dependabot-sourced body lists both — affected package and fixed version).
+```bash
+glab mr list --search '<package>'
+```
 
-2. **Look for a sibling PR**:
+- **An open MR already pins a version that fixes this CVE**: add the CVE ID to its title and description. Do not open a new MR.
+- **An open MR exists but its pin is too low**: check out its branch, bump the version to cover both CVEs, and update the title and description.
+- **No open MR exists**: create a new `fix/cve-<package>` branch and open the MR as usual.
 
-   ```bash
-   gh pr list --state open --search '<package> in:title' --json number,title,headRefName
-   ```
+Renovate also opens dependency update MRs on this repository. If a Renovate MR already upgrades the vulnerable package far enough, prefer merging it over opening a new one.
 
-3. **Decide based on the result**:
+### Merge request conventions for CVE fixes
 
-   - **Sibling PR exists and its branch already pins ≥ `<min-patched-version>`**:
-     - `gh pr checkout <number>`
-     - Leave the CHANGELOG line as-is — it does not enumerate CVEs, so no edit is needed. Do not add a new CHANGELOG line.
-     - `gh pr edit <number>` to append the CVE ID to the title and body, and add a `Fixes <LINEAR-ID>` line to the PR body alongside any existing `Fixes` lines (this auto-links the Linear issue and Linear will mark it Done when the PR merges).
-     - Do not transition the Linear issue manually — leave it for the merge to close.
-     - **Do not open a new PR.**
+- Title format: `chore: upgrade <pkg> to ^x.y.z to address CVE-A, CVE-B, ...` (list every CVE the MR resolves).
+- List the CVE IDs and the dependency chain you traced in the MR description.
 
-   - **Sibling PR exists but its pin is too low to cover this CVE**:
-     - Check out the branch.
-     - Bump the resolution / package version higher to cover both.
-     - **Edit** the existing CHANGELOG line — update the version. Update the PR title and body, and add `Fixes <LINEAR-ID>` to the PR body.
-     - Do not transition the Linear issue manually — leave it for the merge to close.
+## Branches and Merge Requests
 
-   - **No sibling PR exists**:
-     - Create a new `cursor/cve/<package>` branch and open the PR as usual.
+This repository is hosted on GitLab at `git.kudelski.com:KS/solutions/ide-infra/sourcebot`. Use `glab` (not `gh`) for merge requests, issues, and pipelines. The default branch is `master`.
 
-4. **Post-flight (race-window backstop)**: After opening a new PR, re-run step 2. If a competing PR with a *lower* number appeared while you were working, close yours, push your CHANGELOG entry and Linear link onto the older PR.
+When creating a branch or opening a merge request, ask the user for the related issue or ticket, if there is one.
 
-### CHANGELOG and PR conventions for CVE fixes
+Branch naming convention: `<type>/<short-description>`, where `<type>` is one of the conventional commit types below (e.g. `fix/search-scroll-state`, `chore/combined-renovate-updates`).
 
-- CHANGELOG entry (under `[Unreleased] → Fixed`): `Upgraded \`<pkg>\` to \`^x.y.z\`. [#<PR>]`. Do NOT list CVE IDs in the CHANGELOG.
-- **One CHANGELOG line per PR**, not per CVE. A batched PR addressing multiple CVEs still gets a single line that does not enumerate them.
-- PR title format: `chore: upgrade <pkg> to ^x.y.z to address CVE-A, CVE-B, ...` (list every CVE the PR resolves).
-- Keep entries short. CVE IDs belong in the PR title and body, not the CHANGELOG.
-
-## Branches and Pull Requests
-
-When creating a branch or opening a PR, ask the user for:
-1. The Linear issue ID (if available)
-2. The GitHub issue number (if available)
-
-Branch naming convention:
-- General: `<username>/<branch_name>-<linear_issue_id>`
-- Bug fixes: `<username>/fix-<linear_issue_id>`
-- If no Linear issue ID is available, omit it from the branch name
-
-PR title should follow conventional commit standards:
+Merge request titles follow conventional commit standards:
 - `feat:` new feature or functionality
 - `fix:` bug fix
 - `docs:` documentation or README changes
@@ -441,11 +433,8 @@ You can optionally include a scope to indicate which package is affected:
 - `feat(web):` feature in the web package
 - `fix(worker):` bug fix in the worker package (`backend/`)
 
-PR description:
-- If a GitHub issue number was provided, include `Fixes #<github_issue_number>` in the PR description
-- If a Linear issue ID was provided (e.g., SOU-123), include `Fixes SOU-123` at the top of the PR description to auto-link the PR to the Linear issue
+Merge request description:
+- If an issue or ticket was provided, reference it (e.g. `Closes #123` for a GitLab issue).
+- Explain what changed, why, and how you verified it.
 
-After the PR is created:
-- Update CHANGELOG.md with an entry under `[Unreleased]` linking to the new PR. New entries should be placed at the bottom of their section.
-- Do NOT add a CHANGELOG entry for documentation-only changes (e.g., changes only in `docs/`)
-- Enterprise-only features (gated by an entitlement) should be prefixed with `[EE]` in the CHANGELOG entry (e.g., `- [EE] Added support for ...`)
+This fork does not keep a `CHANGELOG.md`. Do not add changelog entries.

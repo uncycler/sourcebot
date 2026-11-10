@@ -4,26 +4,17 @@ import { useNonEmptyQueryParam } from "@/hooks/useNonEmptyQueryParam";
 import { createContext, useCallback, useEffect, useState } from "react";
 
 export interface BrowseState {
-    selectedSymbolInfo?: {
-        symbolName: string;
-        repoName: string;
-        revisionName: string;
-        language: string;
-    }
     isBottomPanelCollapsed: boolean;
     isFileTreePanelCollapsed: boolean;
     isFileSearchOpen: boolean;
-    activeExploreMenuTab: "references" | "definitions";
-    activeBottomPanelTab: "explore" | "history";
+    activeBottomPanelTab: "history";
     bottomPanelSize: number;
 }
 
 const defaultState: BrowseState = {
-    selectedSymbolInfo: undefined,
     isBottomPanelCollapsed: true,
     isFileTreePanelCollapsed: false,
     isFileSearchOpen: false,
-    activeExploreMenuTab: "references",
     activeBottomPanelTab: "history",
     bottomPanelSize: 35,
 };

@@ -2,26 +2,21 @@ import { ReactNode } from "react";
 import type { OrgRole } from "@sourcebot/db";
 
 export const BannerPriority = {
-    LICENSE_EXPIRED:          100,
-    LICENSE_REBOUND_ELSEWHERE: 97,
-    SERVICE_PING_ENFORCED:     95,
-    INVOICE_PAST_DUE:          90,
-    PERMISSION_SYNC:           50,
-    TRIAL:                     25,
-    LICENSE_EXPIRY_HEADS_UP:   20,
-    SERVICE_PING_FAILED:       10,
-    UPGRADE_AVAILABLE:          5,
+    CONNECTION_SYNC_FAILED:    48,
+    REPOSITORY_SYNC_FAILED:    45,
+    CONNECTION_SYNC_WARNING:   18,
+    REPOSITORY_SYNC_WARNING:   15,
+    CONNECTION_FIRST_SYNC:     14,
+    REPOSITORY_FIRST_SYNC:     12,
 } as const;
 
 export type BannerId =
-    | 'licenseExpired'
-    | 'licenseReboundElsewhere'
-    | 'invoicePastDue'
-    | 'permissionSync'
-    | 'licenseExpiryHeadsUp'
-    | 'trial'
-    | 'servicePingFailed'
-    | 'upgradeAvailable';
+    | 'connectionSyncFailed'
+    | 'connectionSyncWarning'
+    | 'connectionFirstSync'
+    | 'repositorySyncFailed'
+    | 'repositorySyncWarning'
+    | 'repositoryFirstSync';
 
 export interface BannerProps {
     id: BannerId;

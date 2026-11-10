@@ -1,10 +1,8 @@
 import { sew } from "@/middleware/sew";
-import { createAudit } from '@/ee/features/audit/audit';
 import { invalidGitRef, notFound, ServiceError, unexpectedError } from '@/lib/serviceError';
 import { withOptionalAuth } from "@/middleware/withAuth";
 import { getRepoPath } from '@sourcebot/shared';
-import { headers } from 'next/headers';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import type z from 'zod';
 import { getTreeRequestSchema, getTreeResponseSchema } from './schemas';
 import { buildFileTree, isGitRefValid, isPathValid, normalizePath } from './utils';
@@ -19,19 +17,8 @@ export type GetTreeResponse = z.infer<typeof getTreeResponseSchema>;
  * repo/revision, including intermediate directories needed to connect them
  * into a single tree.
  */
-export const getTree = async ({ repoName, revisionName, paths }: GetTreeRequest, { source }: { source?: string } = {}): Promise<GetTreeResponse | ServiceError> => sew(() =>
-    withOptionalAuth(async ({ org, prisma, user }) => {
-        if (user) {
-            const resolvedSource = source ?? (await headers()).get('X-Sourcebot-Client-Source') ?? undefined;
-            await createAudit({
-                action: 'user.fetched_file_tree',
-                actor: { id: user.id, type: 'user' },
-                target: { id: org.id.toString(), type: 'org' },
-                orgId: org.id,
-                metadata: { source: resolvedSource },
-            });
-        }
-
+export const getTree = async ({ repoName, revisionName, paths }: GetTreeRequest): Promise<GetTreeResponse | ServiceError> => sew(() =>
+    withOptionalAuth(async ({ org, prisma }) => {
         const repo = await prisma.repo.findFirst({
             where: {
                 name: repoName,

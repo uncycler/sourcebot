@@ -11,7 +11,7 @@ Routes outside `(app)/` (like `/login`, `/signup`, `/invite`, `/onboard`) are ac
 The `layout.tsx` acts as a gate and app shell. It runs the following checks in order, short-circuiting if any condition is met:
 
 1. **Org existence** - Looks up the single-tenant org by `SINGLE_TENANT_ORG_ID`. Returns 404 if missing.
-2. **Authentication** - If the user is not logged in and anonymous access is not enabled, redirects to `/login` (or renders GCP IAP auth if configured).
+2. **Authentication** - If the user is not logged in and anonymous access is not enabled, redirects to `/login`.
 3. **Membership** - If the user is logged in but not a member of the org, renders one of:
    - `JoinOrganizationCard` if the org does not require approval
    - `SubmitJoinRequest` / `PendingApprovalCard` if the org requires approval

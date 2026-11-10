@@ -12,7 +12,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { RepositoryInfo, SearchResultFile, SearchStats } from "@/features/search";
-import useCaptureEvent from "@/hooks/useCaptureEvent";
 import { useNonEmptyQueryParam } from "@/hooks/useNonEmptyQueryParam";
 import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { ServiceErrorException } from "@/lib/serviceError";
@@ -25,6 +24,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { ImperativePanelHandle } from "react-resizable-panels";
+import { useIsClient } from "usehooks-ts";
 import { CopyIconButton } from "../../components/copyIconButton";
 import { SearchBar } from "../../components/searchBar";
 import { useStreamedSearch } from "../useStreamedSearch";
@@ -38,7 +38,6 @@ interface SearchResultsPageProps {
     defaultMaxMatchCount: number;
     isRegexEnabled: boolean;
     isCaseSensitivityEnabled: boolean;
-    isSearchAssistSupported: boolean;
 }
 
 export const SearchResultsPage = ({
@@ -46,12 +45,15 @@ export const SearchResultsPage = ({
     defaultMaxMatchCount,
     isRegexEnabled,
     isCaseSensitivityEnabled,
-    isSearchAssistSupported,
 }: SearchResultsPageProps) => {
     const router = useRouter();
     const { setSearchHistory } = useSearchHistory();
     const { toast } = useToast();
-    const captureEvent = useCaptureEvent();
+    // The results panel reads its collapsed state from localStorage when it
+    // mounts, and results are streamed on the client, so only render it in the
+    // browser. Rendering it on the server threw "useLocalStorage is a
+    // client-only hook".
+    const isClient = useIsClient();
 
     // Encodes the number of matches to return in the search response.
     const _maxMatchCount = parseInt(useNonEmptyQueryParam(SearchQueryParams.matches) ?? `${defaultMaxMatchCount}`);
@@ -62,7 +64,6 @@ export const SearchResultsPage = ({
         files,
         repoInfo,
         timeToSearchCompletionMs,
-        timeToFirstSearchResultMs,
         isStreaming,
         numMatches,
         isExhaustive,
@@ -106,55 +107,6 @@ export const SearchResultsPage = ({
         return searchQuery.includes('rev:');
     }, [searchQuery]);
 
-    useEffect(() => {
-        if (isStreaming || !stats) {
-            return;
-        }
-
-        const fileLanguages = files.map(file => file.language) || [];
-
-        console.debug('timeToFirstSearchResultMs:', timeToFirstSearchResultMs);
-        console.debug('timeToSearchCompletionMs:', timeToSearchCompletionMs);
-
-        captureEvent("search_finished", {
-            durationMs: timeToSearchCompletionMs,
-            timeToSearchCompletionMs,
-            timeToFirstSearchResultMs,
-            fileCount: stats.fileCount,
-            matchCount: stats.totalMatchCount,
-            actualMatchCount: stats.actualMatchCount,
-            filesSkipped: stats.filesSkipped,
-            contentBytesLoaded: stats.contentBytesLoaded,
-            indexBytesLoaded: stats.indexBytesLoaded,
-            crashes: stats.crashes,
-            shardFilesConsidered: stats.shardFilesConsidered,
-            filesConsidered: stats.filesConsidered,
-            filesLoaded: stats.filesLoaded,
-            shardsScanned: stats.shardsScanned,
-            shardsSkipped: stats.shardsSkipped,
-            shardsSkippedFilter: stats.shardsSkippedFilter,
-            ngramMatches: stats.ngramMatches,
-            ngramLookups: stats.ngramLookups,
-            wait: stats.wait,
-            matchTreeConstruction: stats.matchTreeConstruction,
-            matchTreeSearch: stats.matchTreeSearch,
-            regexpsConsidered: stats.regexpsConsidered,
-            flushReason: stats.flushReason,
-            fileLanguages,
-            isSearchExhaustive: isExhaustive,
-            isBranchFilteringEnabled,
-        });
-    }, [
-        captureEvent,
-        files,
-        isStreaming,
-        isExhaustive,
-        stats,
-        timeToSearchCompletionMs,
-        timeToFirstSearchResultMs,
-        isBranchFilteringEnabled,
-    ]);
-
     const onLoadMoreResults = useCallback(() => {
         const url = createPathWithQueryParams(`/search`,
             [SearchQueryParams.query, searchQuery],
@@ -178,7 +130,6 @@ export const SearchResultsPage = ({
                             query: searchQuery,
                         }}
                         className="w-full"
-                        isSearchAssistSupported={isSearchAssistSupported}
                     />
                 </div>
                 <Separator />
@@ -190,7 +141,7 @@ export const SearchResultsPage = ({
                     <p className="font-semibold text-center">Failed to search</p>
                     <p className="text-sm text-center">{error instanceof ServiceErrorException ? error.serviceError.message : error.message}</p>
                 </div>
-            ) : (
+            ) : isClient && (
                 <PanelGroup
                     fileMatches={files}
                     onLoadMoreResults={onLoadMoreResults}

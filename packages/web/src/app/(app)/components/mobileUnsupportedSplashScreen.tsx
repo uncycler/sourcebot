@@ -5,19 +5,15 @@ import { Card } from "@/components/ui/card";
 import { TriangleAlert } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { dismissMobileUnsupportedSplashScreen } from "@/actions";
-import useCaptureEvent from "@/hooks/useCaptureEvent";
 
 export const MobileUnsupportedSplashScreen = () => {
-    const captureEvent = useCaptureEvent();
 
     useEffect(() => {
-        captureEvent('wa_mobile_unsupported_splash_screen_displayed', {});
-    }, [captureEvent]);
+    }, []);
 
     const onDismissed = useCallback(() => {
         dismissMobileUnsupportedSplashScreen();
-        captureEvent('wa_mobile_unsupported_splash_screen_dismissed', {});
-    }, [captureEvent]);
+    }, []);
 
     return (
         <div className="flex flex-col items-center justify-center p-2 min-h-screen bg-backgroundSecondary">

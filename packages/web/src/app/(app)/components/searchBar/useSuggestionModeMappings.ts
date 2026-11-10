@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { SearchPrefix } from "./constants";
 import { SuggestionMode } from "./searchSuggestionsBox";
-import { useHasEntitlement } from "@/features/entitlements/useHasEntitlement";
 
 const negate = (prefix: SearchPrefix) => {
     return `-${prefix}`;
@@ -20,8 +19,6 @@ type SuggestionModeMapping = {
  * @see [searchSuggestionsBox.tsx](./searchSuggestionsBox.tsx)
  */
 export const useSuggestionModeMappings = () => {
-    const isSearchContextsEnabled = useHasEntitlement('search-contexts');
-
     const mappings = useMemo((): SuggestionModeMapping[] => {
         return [
             {
@@ -82,17 +79,8 @@ export const useSuggestionModeMappings = () => {
                     SearchPrefix.visibility
                 ]
             },
-            ...(isSearchContextsEnabled ? [
-                {
-                    suggestionMode: "context",
-                    prefixes: [
-                        SearchPrefix.context,
-                        negate(SearchPrefix.context),
-                    ]
-                } satisfies SuggestionModeMapping,
-            ] : []),
         ]
-    }, [isSearchContextsEnabled]);
+    }, []);
 
     return mappings;
 }

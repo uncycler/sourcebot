@@ -1,23 +1,18 @@
-import "./instrument.js";
-
-import * as Sentry from "@sentry/node";
 import { createLogger, env, getConfigSettings } from "@sourcebot/shared";
-import { prisma } from "./prisma.js";
 import 'express-async-errors';
 import { existsSync } from 'fs';
 import { mkdir } from 'fs/promises';
-import { Api } from "./api.js";
-import { AttachmentPruner } from "./attachmentPruner.js";
 import { ConfigManager } from "./configManager.js";
-import { ConnectionManager } from './connectionManager.js';
 import { INDEX_CACHE_DIR, REPOS_CACHE_DIR, SHUTDOWN_SIGNALS } from './constants.js';
-import { AccountPermissionSyncer } from "./ee/accountPermissionSyncer.js";
-import { AuditLogPruner } from "./ee/auditLogPruner.js";
-import { RepoPermissionSyncer } from './ee/repoPermissionSyncer.js';
-import { shutdownPosthog } from "./posthog.js";
+import { BullMQJobManager } from "./jobManager.js";
+import { prisma } from "./prisma.js";
 import { PromClient } from './promClient.js';
-import { RepoIndexManager } from "./repoIndexManager.js";
 import { redis } from "./redis.js";
+import { createConnectionSyncWorkload } from "./connectionSyncWorkload.js";
+import { cleanupOrphanedRepoResources, createRepoCleanupWorkload } from "./repoCleanupWorkload.js";
+import { createRepoIndexWorkload } from "./repoIndexWorkload.js";
+import { Api } from "./api.js";
+import { reconcileJobSchedulers } from "./reconcileJobSchedulers.js";
 
 const logger = createLogger('backend-entrypoint');
 
@@ -40,39 +35,47 @@ try {
     process.exit(1);
 }
 
-const promClient = new PromClient();
 
 const settings = await getConfigSettings(env.CONFIG_PATH);
-
-const connectionManager = new ConnectionManager(prisma, settings, redis, promClient);
-const repoPermissionSyncer = new RepoPermissionSyncer(prisma, settings, redis);
-const accountPermissionSyncer = new AccountPermissionSyncer(prisma, settings, redis);
-const repoIndexManager = new RepoIndexManager(prisma, settings, redis, promClient);
-const configManager = new ConfigManager(prisma, connectionManager, env.CONFIG_PATH);
-const auditLogPruner = new AuditLogPruner(prisma);
-const attachmentPruner = new AttachmentPruner(prisma);
-
-connectionManager.startScheduler();
-await repoIndexManager.startScheduler();
-auditLogPruner.startScheduler();
-attachmentPruner.startScheduler();
-
-if (env.PERMISSION_SYNC_ENABLED === 'true') {
-    if (env.PERMISSION_SYNC_REPO_DRIVEN_ENABLED === 'true') {
-        await repoPermissionSyncer.startScheduler();
-    }
-    await accountPermissionSyncer.startScheduler();
-}
-
-const api = new Api(
-    promClient,
-    prisma,
-    connectionManager,
-    repoIndexManager,
-    accountPermissionSyncer,
-);
+const promClient = new PromClient();
 
 logger.info('Worker started.');
+
+const jobManager = new BullMQJobManager(redis);
+
+const connectionSyncWorkload = createConnectionSyncWorkload({
+    db: prisma,
+    jobManager,
+    settings,
+});
+const repoIndexWorkload = createRepoIndexWorkload({
+    db: prisma,
+    settings,
+});
+const repoCleanupWorkload = createRepoCleanupWorkload({
+    db: prisma,
+    settings,
+});
+
+jobManager.register(connectionSyncWorkload);
+jobManager.register(repoIndexWorkload);
+jobManager.register(repoCleanupWorkload);
+
+const api = new Api(promClient, prisma, jobManager, redis, settings);
+
+await cleanupOrphanedRepoResources(prisma);
+
+const configManager = new ConfigManager(jobManager, env.CONFIG_PATH);
+await configManager.syncConfig();
+
+await reconcileJobSchedulers({
+    db: prisma,
+    jobManager,
+    settings,
+});
+
+await jobManager.start();
+
 
 const listenToShutdownSignals = () => {
     const signals = SHUTDOWN_SIGNALS;
@@ -88,24 +91,17 @@ const listenToShutdownSignals = () => {
 
             logger.info(`Received ${signal}, cleaning up...`);
 
-            await repoIndexManager.dispose()
-            await connectionManager.dispose()
-            await repoPermissionSyncer.dispose()
-            await accountPermissionSyncer.dispose()
-            await auditLogPruner.dispose()
-            await attachmentPruner.dispose()
             await configManager.dispose()
+            await api.dispose();
+            await jobManager.stop();
 
             await prisma.$disconnect();
             await redis.quit();
-            await api.dispose();
-            await shutdownPosthog();
 
             logger.info('All workers shut down gracefully');
             signals.forEach(sig => process.removeListener(sig, cleanup));
             return 0;
         } catch (error) {
-            Sentry.captureException(error);
             logger.error('Error shutting down worker:', error);
             return 1;
         }

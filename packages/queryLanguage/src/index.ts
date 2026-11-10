@@ -5,4 +5,3 @@ type SyntaxNode = Tree['topNode'];
 export type { Tree, SyntaxNode };
 export * from "./parser";
 export * from "./parser.terms";
-export { SEARCH_SYNTAX_DESCRIPTION } from "./syntaxDescription";

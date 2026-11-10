@@ -3,7 +3,6 @@
 import { RepositoryInfo, SearchRequest, SearchResultFile, SearchStats, StreamedSearchResponse } from '@/features/search';
 import { ServiceErrorException } from '@/lib/serviceError';
 import { isServiceError } from '@/lib/utils';
-import * as Sentry from '@sentry/nextjs';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface CacheEntry {
@@ -256,7 +255,6 @@ export const useStreamedSearch = ({ query, matches, contextLines, whole, isRegex
                 }
 
                 console.error(error);
-                Sentry.captureException(error);
                 const timeToSearchCompletionMs = performance.now() - startTime;
                 setState(prev => ({
                     ...prev,

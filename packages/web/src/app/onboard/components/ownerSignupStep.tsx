@@ -10,7 +10,6 @@ export function OwnerSignupStep({ nextStep }: OwnerSignupStepProps) {
             <AuthMethodSelector
                 callbackUrl={`/onboard?step=${nextStep}`}
                 context="signup"
-                securityNoticeClosable={false}
             />
         </div>
     );

@@ -7,8 +7,6 @@ import { LogoutEscapeHatch } from '../components/logoutEscapeHatch';
 import { InviteNotFoundCard } from './components/inviteNotFoundCard';
 import { SINGLE_TENANT_ORG_ID } from '@/lib/constants';
 import { __unsafePrisma } from '@/prisma';
-import { isScimEnabled } from '@/features/scim/utils';
-import { NotProvisionedCard } from '@/features/membership/components/notProvisionedCard';
 import { activeOrPendingMembershipWhere } from '@/features/membership/utils';
 
 interface RedeemPageProps {
@@ -47,10 +45,6 @@ export default async function RedeemPage(props: RedeemPageProps) {
     // If already a member, redirect to the organization
     if (membership) {
         redirect(`/`);
-    }
-
-    if (await isScimEnabled(org)) {
-        return <NotProvisionedCard />
     }
 
     const inviteInfo = await getInviteInfo(inviteId);

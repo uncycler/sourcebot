@@ -1,17 +1,10 @@
-import { hasEntitlement } from "@/lib/entitlements";
-import { createLogger, getSeatCap } from "@sourcebot/shared";
 import { OrgRole, Prisma } from "@sourcebot/db";
 
-const logger = createLogger("membership-utils");
-
 /**
- * Resolves the role a user receives when joining the org via invite,
- * account-request approval, or interactive-login auto-join. On paid plans (the
- * `org-management` entitlement) joiners are MEMBERs; on free plans there is no
- * role distinction, so they join as OWNER.
+ * The role a user receives when joining the org via invite, account-request
+ * approval, or interactive-login auto-join.
  */
-export const getDefaultMemberRole = async (): Promise<OrgRole> =>
-    (await hasEntitlement("org-management")) ? OrgRole.MEMBER : OrgRole.OWNER;
+export const DEFAULT_MEMBER_ROLE = OrgRole.OWNER;
 
 /**
  * Matches suspended memberships.
@@ -42,30 +35,3 @@ export const activeMembershipWhere = (): Prisma.UserToOrgWhereInput => ({
     ...activeOrPendingMembershipWhere(),
     lastActiveAt: { not: null },
 });
-
-/**
- * Checks to see if the given organization has seat availability. Seat
- * availability is determined by the `seats` parameter in the offline license
- * key, if available.
- */
-export const orgHasAvailability = async (orgId: number, tx: Prisma.TransactionClient): Promise<boolean> => {
-    const seatCap = getSeatCap();
-
-    // Pending and suspended members are preserved but don't consume seats.
-    const activeUserCount = await tx.userToOrg.count({
-        where: {
-            orgId,
-            ...activeMembershipWhere(),
-        },
-    });
-
-    if (
-        seatCap &&
-        activeUserCount >= seatCap
-    ) {
-        logger.error(`orgHasAvailability: org ${orgId} has reached max capacity`);
-        return false;
-    }
-
-    return true;
-};

@@ -66,4 +66,4 @@ export const GET = apiHandler(async (request: NextRequest) => {
             'Cache-Control': 'public, max-age=300',
         },
     });
-}, { track: false });
+});

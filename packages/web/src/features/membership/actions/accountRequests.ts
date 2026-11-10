@@ -1,11 +1,8 @@
 'use server';
 
-import { createAudit } from "@/ee/features/audit/audit";
 import JoinRequestApprovedEmail from "@/emails/joinRequestApprovedEmail";
 import { ensureActiveMember } from "@/features/membership/membership.service";
-import { getDefaultMemberRole } from "@/features/membership/utils";
-import { membershipManagedByIdpError } from "@/features/membership/errors";
-import { isScimEnabled } from "@/features/scim/utils";
+import { DEFAULT_MEMBER_ROLE } from "@/features/membership/utils";
 import { notAuthenticated, notFound } from "@/lib/serviceError";
 import { isServiceError } from "@/lib/utils";
 import { sew } from "@/middleware/sew";
@@ -37,12 +34,6 @@ export const createAccountRequest = async () => sew(async () => {
 
     if (!org) {
         return notFound("Organization not found");
-    }
-
-    // With SCIM enabled the IdP is the source of truth for membership, so
-    // un-provisioned users can't request to join.
-    if (await isScimEnabled(org)) {
-        return membershipManagedByIdpError();
     }
 
     const existingRequest = await __unsafePrisma.accountRequest.findUnique({
@@ -113,7 +104,7 @@ export const createAccountRequest = async () => sew(async () => {
                 text: `New account request for ${org.name} on Sourcebot by ${user.name ?? user.email}`,
             });
 
-            const failed = result.rejected.concat(result.pending).filter(Boolean);
+            const failed = result.rejected.concat(result.pending ?? []).filter(Boolean);
             if (failed.length > 0) {
                 logger.error(`Failed to send account request email to ${ownerEmails.join(', ')}: ${failed}`);
             }
@@ -129,32 +120,8 @@ export const createAccountRequest = async () => sew(async () => {
 });
 
 export const approveAccountRequest = async (requestId: string) => sew(async () =>
-    withAuth(async ({ org, user, role, prisma }) =>
+    withAuth(async ({ org, role, prisma }) =>
         withMinimumOrgRole(role, OrgRole.OWNER, async () => {
-            // With SCIM enabled the IdP is the source of truth for membership;
-            // approving a request would mint a member it never provisioned.
-            if (await isScimEnabled(org)) {
-                return membershipManagedByIdpError();
-            }
-
-            const failAuditCallback = async (error: string) => {
-                await createAudit({
-                    action: "user.join_request_approve_failed",
-                    actor: {
-                        id: user.id,
-                        type: "user"
-                    },
-                    target: {
-                        id: requestId,
-                        type: "account_join_request"
-                    },
-                    orgId: org.id,
-                    metadata: {
-                        message: error,
-                    }
-                });
-            }
-
             const request = await prisma.accountRequest.findUnique({
                 where: {
                     id: requestId,
@@ -165,16 +132,13 @@ export const approveAccountRequest = async (requestId: string) => sew(async () =
             });
 
             if (!request || request.orgId !== org.id) {
-                await failAuditCallback("Request not found");
                 return notFound();
             }
 
             const addUserToOrgRes = await ensureActiveMember(org.id, request.requestedById, {
-                actor: { id: request.requestedById, type: "user" },
-                role: await getDefaultMemberRole(),
+                role: DEFAULT_MEMBER_ROLE,
             });
             if (isServiceError(addUserToOrgRes)) {
-                await failAuditCallback(addUserToOrgRes.message);
                 return addUserToOrgRes;
             }
 
@@ -185,18 +149,6 @@ export const approveAccountRequest = async (requestId: string) => sew(async () =
                 },
             });
 
-            await createAudit({
-                action: "user.join_request_approved",
-                actor: {
-                    id: user.id,
-                    type: "user"
-                },
-                orgId: org.id,
-                target: {
-                    id: requestId,
-                    type: "account_join_request"
-                }
-            });
 
             // Send approval email to the user
             const smtpConnectionUrl = getSMTPConnectionURL();
@@ -220,7 +172,7 @@ export const approveAccountRequest = async (requestId: string) => sew(async () =
                     text: `Your request to join ${org.name} on Sourcebot has been approved. You can now access the organization at ${env.AUTH_URL}`,
                 });
 
-                const failed = result.rejected.concat(result.pending).filter(Boolean);
+                const failed = result.rejected.concat(result.pending ?? []).filter(Boolean);
                 if (failed.length > 0) {
                     logger.error(`Failed to send approval email to ${request.requestedBy.email}: ${failed}`);
                 }

@@ -19,7 +19,6 @@ import { isServiceError } from "@/lib/utils";
 import { Copy, Check, AlertTriangle, Loader2, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useToast } from "@/components/hooks/use-toast";
-import useCaptureEvent from "@/hooks/useCaptureEvent";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -37,7 +36,6 @@ interface ApiKeysPageProps {
 
 export function ApiKeysPage({ canCreateApiKey, apiKeys }: ApiKeysPageProps) {
     const { toast } = useToast();
-    const captureEvent = useCaptureEvent();
     const router = useRouter();
 
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -65,13 +63,11 @@ export function ApiKeysPage({ canCreateApiKey, apiKeys }: ApiKeysPageProps) {
                     description: `Failed to create API key: ${result.message}`,
                     variant: "destructive",
                 });
-                captureEvent('wa_api_key_creation_fail', {});
                 return;
             }
 
             setNewlyCreatedKey(result.key);
             router.refresh();
-            captureEvent('wa_api_key_created', {});
         } catch (error) {
             console.error(error);
             toast({
@@ -79,7 +75,6 @@ export function ApiKeysPage({ canCreateApiKey, apiKeys }: ApiKeysPageProps) {
                 description: `Failed to create API key: ${error}`,
                 variant: "destructive",
             });
-            captureEvent('wa_api_key_creation_fail', {});
         } finally {
             setIsCreatingKey(false);
         }

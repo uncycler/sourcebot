@@ -1,19 +1,16 @@
-import { __unsafePrisma, userScopedPrismaClientExtension } from "@/prisma";
-import { hashSecret, OAUTH_ACCESS_TOKEN_PREFIX, API_KEY_PREFIX, LEGACY_API_KEY_PREFIX, env } from "@sourcebot/shared";
+import { __unsafePrisma } from "@/prisma";
+import { hashSecret, API_KEY_PREFIX, LEGACY_API_KEY_PREFIX, env } from "@sourcebot/shared";
 import { ApiKey, Org, OrgRole, PrismaClient, UserToOrg, UserWithAccounts } from "@sourcebot/db";
 import { headers } from "next/headers";
 import { auth } from "../auth";
-import { insufficientOAuthScope, notAuthenticated, notFound, ServiceError } from "../lib/serviceError";
+import { notAuthenticated, notFound, ServiceError } from "../lib/serviceError";
 import { SINGLE_TENANT_ORG_ID } from "../lib/constants";
 import { StatusCodes } from "http-status-codes";
 import { ErrorCode } from "../lib/errorCodes";
 import { isServiceError } from "../lib/utils";
-import { hasEntitlement, isAnonymousAccessEnabled } from "@/lib/entitlements";
+import { isAnonymousAccessEnabled } from "@/lib/anonymousAccess";
 import { activatePendingMembership } from "@/features/membership/membership.service";
-import { hasRequiredOAuthScopes, parseOAuthScopeString } from "@/ee/features/oauth/utils";
-import { DPOP_AUTH_SCHEME, DPOP_PROOF_HEADER, verifyDpopProof } from "@/ee/features/oauth/dpop";
 import { getCurrentRequest } from "@/lib/requestContext";
-import { setSentryUser } from "@/lib/sentryUser";
 
 const LAST_ACTIVE_AT_THRESHOLD_MS = 5 * 60 * 1000;
 
@@ -22,6 +19,7 @@ type RequiredAuthContext = {
     role: OrgRole;
     org: Org;
     prisma: PrismaClient;
+    principal: AuthPrincipal;
 };
 
 type OptionalAuthContext =
@@ -31,10 +29,24 @@ type OptionalAuthContext =
         role?: undefined;
         org: Org;
         prisma: PrismaClient;
+        principal?: AuthPrincipal;
     };
 
+export type AuthPrincipal =
+    | { source: 'session' }
+    | { source: 'api_key' };
+
+export type AuthSource = AuthPrincipal['source'];
+
+export type AuthResult = {
+    user: UserWithAccounts;
+    principal: AuthPrincipal;
+};
+
 type AuthOptions = {
-    requiredOAuthScopes?: readonly string[];
+    requiredAuthSource?: AuthSource;
+    /** Whether this request should update user activity and activate a pending membership. Defaults to true. */
+    recordActivity?: boolean;
 };
 
 export const withAuth = async <T>(fn: (params: RequiredAuthContext) => Promise<T>, options: AuthOptions = {}) => {
@@ -44,13 +56,13 @@ export const withAuth = async <T>(fn: (params: RequiredAuthContext) => Promise<T
         return authContext;
     }
 
-    const { user, org, role, prisma } = authContext;
+    const { user, org, role, prisma, principal } = authContext;
 
-    if (!user || !role) {
+    if (!user || !role || !principal) {
         return notAuthenticated();
     }
 
-    return fn({ user, org, role, prisma });
+    return fn({ user, org, role, prisma, principal });
 };
 
 export const withOptionalAuth = async <T>(fn: (params: OptionalAuthContext) => Promise<T>, options: AuthOptions = {}) => {
@@ -70,13 +82,12 @@ export const withOptionalAuth = async <T>(fn: (params: OptionalAuthContext) => P
 };
 
 export const getAuthContext = async (options: AuthOptions = {}): Promise<OptionalAuthContext | ServiceError> => {
+    const {
+        requiredAuthSource,
+        recordActivity = true,
+    } = options;
     const authResult = await getAuthenticatedUser();
     const user = authResult?.user;
-
-    setSentryUser(
-        user ?? null,
-        env.SOURCEBOT_TELEMETRY_PII_COLLECTION_ENABLED === 'true',
-    );
 
     const org = await __unsafePrisma.org.findUnique({
         where: {
@@ -104,7 +115,7 @@ export const getAuthContext = async (options: AuthOptions = {}): Promise<Optiona
 
     if (
         env.DISABLE_API_KEY_USAGE_FOR_NON_OWNER_USERS === 'true' &&
-        authResult?.source === 'api_key' &&
+        authResult?.principal.source === 'api_key' &&
         role !== OrgRole.OWNER
     ) {
         return {
@@ -115,40 +126,46 @@ export const getAuthContext = async (options: AuthOptions = {}): Promise<Optiona
     }
 
     if (
-        authResult?.source === 'oauth' &&
-        options.requiredOAuthScopes?.length &&
-        !hasRequiredOAuthScopes(authResult.oauthScopes ?? [], options.requiredOAuthScopes)
+        authResult &&
+        requiredAuthSource &&
+        authResult.principal.source !== requiredAuthSource
     ) {
-        return insufficientOAuthScope(options.requiredOAuthScopes);
+        return {
+            statusCode: StatusCodes.FORBIDDEN,
+            errorCode: ErrorCode.INSUFFICIENT_PERMISSIONS,
+            message: "This operation cannot be performed with the current authentication method.",
+        } satisfies ServiceError;
     }
 
-    const prisma = __unsafePrisma.$extends(await userScopedPrismaClientExtension(user)) as PrismaClient;
+    const prisma = __unsafePrisma as PrismaClient;
 
-    if (user) {
-        updateUserLastActiveAt(user);
-    }
+    if (recordActivity) {
+        if (user) {
+            updateUserLastActiveAt(user);
+        }
 
-    // If the user is currently in a "pending"
-    // state, then we need to activate them.
-    if (
-        membership &&
-        membership.suspendedAt === null &&
-        membership.lastActiveAt === null
-    ) {
-        const result = await activatePendingMembership(membership);
-        if (isServiceError(result)) {
-            return result;
+        // If the user is currently in a "pending"
+        // state, then we need to activate them.
+        if (
+            membership &&
+            membership.suspendedAt === null &&
+            membership.lastActiveAt === null
+        ) {
+            const result = await activatePendingMembership(membership);
+            if (isServiceError(result)) {
+                return result;
+            }
+        }
+
+        if (membership) {
+            updateMembershipLastActiveAt(membership);
         }
     }
 
-    if (membership) {
-        updateMembershipLastActiveAt(membership);
+    if (user && role && authResult) {
+        return { user, org, role, prisma, principal: authResult.principal };
     }
-
-    if (user && role) {
-        return { user, org, role, prisma };
-    }
-    return { user, org, prisma };
+    return { user, org, prisma, principal: authResult?.principal };
 };
 
 const updateUserLastActiveAt = (user: UserWithAccounts) => {
@@ -183,7 +200,7 @@ const updateMembershipLastActiveAt = (membership: UserToOrg) => {
     }
 
     // Fired without a await to avoid blocking; this is only a freshness refresh
-    // for already-active memberships, not seat admission.
+    // for already-active memberships.
     void __unsafePrisma.userToOrg
         .updateMany({
             where: {
@@ -195,9 +212,7 @@ const updateMembershipLastActiveAt = (membership: UserToOrg) => {
         .catch(() => { /* updating the lastActiveAt is best effort. */ });
 };
 
-type AuthSource = 'session' | 'oauth' | 'api_key';
-
-export const getAuthenticatedUser = async (): Promise<{ user: UserWithAccounts, source: AuthSource, oauthScopes?: string[] } | undefined> => {
+export const getAuthenticatedUser = async (): Promise<AuthResult | undefined> => {
     // First, check if we have a valid JWT session.
     const session = await auth();
     if (session) {
@@ -211,7 +226,7 @@ export const getAuthenticatedUser = async (): Promise<{ user: UserWithAccounts, 
             }
         });
 
-        return user ? { user, source: 'session' } : undefined;
+        return user ? { user, principal: { source: 'session' } } : undefined;
     }
 
     const currentRequest = getCurrentRequest();
@@ -220,59 +235,8 @@ export const getAuthenticatedUser = async (): Promise<{ user: UserWithAccounts, 
     // If not, check for a Bearer token in the Authorization header.
     const authorizationHeader = requestHeaders.get("Authorization") ?? undefined;
     const authorization = parseAuthorizationHeader(authorizationHeader);
-    if (authorization && (authorization.scheme === 'Bearer' || authorization.scheme === DPOP_AUTH_SCHEME)) {
+    if (authorization && authorization.scheme === 'Bearer') {
         const bearerToken = authorization.token;
-
-        // OAuth access token
-        if (bearerToken.startsWith(OAUTH_ACCESS_TOKEN_PREFIX)) {
-            if (!await hasEntitlement('oauth')) {
-                return undefined;
-            }
-
-            const secret = bearerToken.slice(OAUTH_ACCESS_TOKEN_PREFIX.length);
-            const hash = hashSecret(secret);
-            const oauthToken = await __unsafePrisma.oAuthToken.findUnique({
-                where: { hash },
-                include: { user: { include: { accounts: true } } },
-            });
-            if (oauthToken && oauthToken.expiresAt > new Date()) {
-                if (!oauthToken.dpopJkt && authorization.scheme === DPOP_AUTH_SCHEME) {
-                    return undefined;
-                }
-
-                if (oauthToken.dpopJkt) {
-                    if (authorization.scheme !== DPOP_AUTH_SCHEME || !currentRequest) {
-                        return undefined;
-                    }
-
-                    const proofResult = await verifyDpopProof({
-                        request: currentRequest,
-                        proof: requestHeaders.get(DPOP_PROOF_HEADER),
-                        expectedJkt: oauthToken.dpopJkt,
-                        accessToken: bearerToken,
-                        requireAccessTokenHash: true,
-                    });
-
-                    if (!proofResult.ok) {
-                        return undefined;
-                    }
-                }
-
-                await __unsafePrisma.oAuthToken.update({
-                    where: { hash },
-                    data: { lastUsedAt: new Date() },
-                });
-                return {
-                    user: oauthToken.user,
-                    source: 'oauth',
-                    oauthScopes: parseOAuthScopeString(oauthToken.scope)
-                };
-            }
-        }
-
-        if (authorization.scheme !== 'Bearer') {
-            return undefined;
-        }
 
         // API key Bearer token (sourcebot-<hex>)
         const apiKey = await getVerifiedApiObject(bearerToken);
@@ -286,7 +250,7 @@ export const getAuthenticatedUser = async (): Promise<{ user: UserWithAccounts, 
                     where: { hash: apiKey.hash },
                     data: { lastUsedAt: new Date() },
                 });
-                return { user, source: 'api_key' };
+                return { user, principal: { source: 'api_key' } };
             }
         }
     }
@@ -323,7 +287,7 @@ export const getAuthenticatedUser = async (): Promise<{ user: UserWithAccounts, 
             },
         });
 
-        return { user, source: 'api_key' };
+        return { user, principal: { source: 'api_key' } };
     }
 
     return undefined;
@@ -338,10 +302,6 @@ function parseAuthorizationHeader(authorizationHeader: string | undefined): { sc
     const scheme = match[1].toLowerCase();
     if (scheme === 'bearer') {
         return { scheme: 'Bearer', token: match[2] };
-    }
-
-    if (scheme === 'dpop') {
-        return { scheme: DPOP_AUTH_SCHEME, token: match[2] };
     }
 
     return { scheme: match[1], token: match[2] };

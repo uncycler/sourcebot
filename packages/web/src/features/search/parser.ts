@@ -3,7 +3,6 @@ import {
     AndExpr,
     ArchivedExpr,
     ContentExpr,
-    ContextExpr,
     FileExpr,
     ForkExpr,
     LangExpr,
@@ -23,8 +22,6 @@ import {
     VisibilityExpr,
 } from '@sourcebot/query-language';
 import { parser as _parser } from '@sourcebot/query-language';
-import { PrismaClient } from '@sourcebot/db';
-import { SINGLE_TENANT_ORG_ID } from '@/lib/constants';
 import { ServiceErrorException } from '@/lib/serviceError';
 import { StatusCodes } from 'http-status-codes';
 import { ErrorCode } from '@/lib/errorCodes';
@@ -77,14 +74,12 @@ const findLinguistLanguage = (value: string): string => {
 export const parseQuerySyntaxIntoIR = async ({
     query,
     options,
-    prisma,
 }: {
     query: string,
     options: {
         isCaseSensitivityEnabled?: boolean;
         isRegexEnabled?: boolean;
     },
-    prisma: PrismaClient,
 }): Promise<QueryIR> => {
 
     try {
@@ -100,29 +95,6 @@ export const parseQuerySyntaxIntoIR = async ({
             input: query,
             isCaseSensitivityEnabled: options.isCaseSensitivityEnabled ?? false,
             isRegexEnabled: options.isRegexEnabled ?? false,
-            onExpandSearchContext: async (contextName: string) => {
-                const context = await prisma.searchContext.findUnique({
-                    where: {
-                        name_orgId: {
-                            name: contextName,
-                            orgId: SINGLE_TENANT_ORG_ID,
-                        }
-                    },
-                    include: {
-                        repos: true,
-                    }
-                });
-
-                if (!context) {
-                    throw new ServiceErrorException({
-                        statusCode: StatusCodes.NOT_FOUND,
-                        errorCode: ErrorCode.SEARCH_CONTEXT_NOT_FOUND,
-                        message: `Search context "${contextName}" not found`,
-                    });
-                }
-
-                return context.repos.map((repo) => repo.name);
-            },
         });
     } catch (error) {
         if (error instanceof SyntaxError) {
@@ -144,13 +116,11 @@ const transformTreeToIR = async ({
     input,
     isCaseSensitivityEnabled,
     isRegexEnabled,
-    onExpandSearchContext,
 }: {
     tree: Tree;
     input: string;
     isCaseSensitivityEnabled: boolean;
     isRegexEnabled: boolean;
-    onExpandSearchContext: (contextName: string) => Promise<string[]>;
 }): Promise<QueryIR> => {
     const transformNode = async (node: SyntaxNode): Promise<QueryIR> => {
         switch (node.type.id) {
@@ -402,19 +372,6 @@ const transformTreeToIR = async ({
                         flags
                     },
                     query: "raw_config"
-                };
-            }
-
-            case ContextExpr: {
-                const repoNames = await onExpandSearchContext(value);
-                return {
-                    repo_set: {
-                        set: repoNames.reduce((acc, s) => {
-                            acc[s.trim()] = true;
-                            return acc;
-                        }, {} as Record<string, boolean>)
-                    },
-                    query: "repo_set"
                 };
             }
 

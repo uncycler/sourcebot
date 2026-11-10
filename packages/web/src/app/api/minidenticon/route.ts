@@ -27,4 +27,4 @@ export const GET = apiHandler(async (request: NextRequest) => {
             'Cache-Control': 'public, max-age=31536000, immutable',
         },
     });
-}, { track: false });
+});

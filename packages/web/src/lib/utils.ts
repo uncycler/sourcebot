@@ -7,13 +7,6 @@ import giteaLogo from "@/public/gitea.svg";
 import gerritLogo from "@/public/gerrit.svg";
 import bitbucketLogo from "@/public/bitbucket.svg";
 import gitLogo from "@/public/git.svg";
-import googleLogo from "@/public/google.svg";
-import oktaLogo from "@/public/okta.svg";
-import keycloakLogo from "@/public/keycloak.svg";
-import microsoftLogo from "@/public/microsoft_entra.svg";
-import authentikLogo from "@/public/authentik.svg";
-import jumpcloudLogo from "@/public/jumpcloud.svg";
-import idiraLogo from "@/public/idira.svg";
 import { ServiceError } from "./serviceError";
 import { ConnectionType } from "@sourcebot/db";
 import { CodeHostType } from "@sourcebot/db";
@@ -72,140 +65,6 @@ const encodeRFC3986URIComponent = (str: string) => {
       (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
     );
   }
-
-type AuthProviderInfo = {
-    id: string;
-    name: string;
-    displayName: string;
-    icon: { src: string; className?: string } | null;
-}
-
-export const getAuthProviderInfo = (providerType: string): AuthProviderInfo => {
-    switch (providerType) {
-        case "github":
-            return {
-                id: "github",
-                name: "GitHub",
-                displayName: "GitHub",
-                icon: {
-                    src: githubLogo,
-                    className: "dark:invert",
-                },
-            };
-        case "gitlab":
-            return {
-                id: "gitlab",
-                name: "GitLab",
-                displayName: "GitLab",
-                icon: {
-                    src: gitlabLogo,
-                },
-            };
-        case "google":
-            return {
-                id: "google",
-                name: "Google",
-                displayName: "Google",
-                icon: {
-                    src: googleLogo,
-                },
-            };
-        case "okta":
-            return {
-                id: "okta",
-                name: "Okta",
-                displayName: "Okta",
-                icon: {
-                    src: oktaLogo,
-                    className: "dark:invert",
-                },
-            };
-        case "keycloak":
-            return {
-                id: "keycloak",
-                name: "Keycloak",
-                displayName: "Keycloak",
-                icon: {
-                    src: keycloakLogo,
-                },
-            };
-        case "microsoft-entra-id":
-            return {
-                id: "microsoft-entra-id",
-                name: "Microsoft Entra ID",
-                displayName: "Microsoft Entra ID",
-                icon: {
-                    src: microsoftLogo,
-                },
-            };
-        case "authentik":
-            return {
-                id: "authentik",
-                name: "Authentik",
-                displayName: "Authentik",
-                icon: {
-                    src: authentikLogo,
-                },
-            }
-        case "jumpcloud":
-            return {
-                id: "jumpcloud",
-                name: "JumpCloud",
-                displayName: "JumpCloud",
-                icon: {
-                    src: jumpcloudLogo,
-                },
-            };
-        case "idira":
-            return {
-                id: "idira",
-                name: "Idira",
-                displayName: "Idira",
-                icon: {
-                    src: idiraLogo,
-                },
-            };
-        case "credentials":
-            return {
-                id: "credentials",
-                name: "Credentials",
-                displayName: "Email & Password",
-                icon: null, // No icon needed for credentials
-            };
-        case "nodemailer":
-            return {
-                id: "nodemailer",
-                name: "Email",
-                displayName: "Email Code",
-                icon: null, // No icon needed for email
-            };
-        case "bitbucket-cloud":
-            return {
-                id: "bitbucket-cloud",
-                name: "Bitbucket Cloud",
-                displayName: "Bitbucket Cloud",
-                icon: {
-                    src: bitbucketLogo,
-                },
-            };
-        case "bitbucket-server":
-            return {
-                id: "bitbucket-server",
-                name: "Bitbucket Server",
-                displayName: "Bitbucket Server",
-                icon: {
-                    src: bitbucketLogo,
-                },
-            };
-        default:
-            return {
-                id: providerType,
-                name: providerType,
-                displayName: providerType.charAt(0).toUpperCase() + providerType.slice(1),
-                icon: null,
-            };
-    }
-};
 
 type CodeHostInfo = {
     type: CodeHostType;
@@ -543,16 +402,34 @@ export const formatCurrency = (
     return formatter.format(amountSmallestUnit / Math.pow(10, fractionDigits));
 }
 
+const recordPerformanceMark = (markName: string) => {
+    try {
+        performance.mark(markName);
+    } catch {
+        // Performance timeline instrumentation must not break the measured operation.
+    }
+}
+
+const recordPerformanceMeasure = (measureName: string, startMark: string, endMark: string) => {
+    try {
+        performance.measure(measureName, startMark, endMark);
+    } catch {
+        // Performance timeline instrumentation must not break the measured operation.
+    }
+}
+
 export const measureSync = <T>(cb: () => T, measureName: string, outputLog: boolean = true) => {
     const startMark = `${measureName}.start`;
     const endMark = `${measureName}.end`;
 
-    performance.mark(startMark);
+    recordPerformanceMark(startMark);
+    const startTime = performance.now();
     const data = cb();
-    performance.mark(endMark);
+    const endTime = performance.now();
+    recordPerformanceMark(endMark);
 
-    const measure = performance.measure(measureName, startMark, endMark);
-    const durationMs = measure.duration;
+    recordPerformanceMeasure(measureName, startMark, endMark);
+    const durationMs = endTime - startTime;
     if (outputLog) {
         console.debug(`[${measureName}] took ${durationMs}ms`);
     }
@@ -567,12 +444,14 @@ export const measure = async <T>(cb: () => Promise<T>, measureName: string, outp
     const startMark = `${measureName}.start`;
     const endMark = `${measureName}.end`;
 
-    performance.mark(startMark);
+    recordPerformanceMark(startMark);
+    const startTime = performance.now();
     const data = await cb();
-    performance.mark(endMark);
+    const endTime = performance.now();
+    recordPerformanceMark(endMark);
 
-    const measure = performance.measure(measureName, startMark, endMark);
-    const durationMs = measure.duration;
+    recordPerformanceMeasure(measureName, startMark, endMark);
+    const durationMs = endTime - startTime;
     if (outputLog) {
         console.debug(`[${measureName}] took ${durationMs}ms`);
     }
@@ -651,6 +530,7 @@ export const fetchWithRetry = async (
 ): Promise<Response> => {
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
+            // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
             const response = await fetch(input, init);
             if (response.ok || !isRetryableStatus(response.status) || attempt === retries) {
                 return response;

@@ -1,20 +1,12 @@
 import { NextRequest } from 'next/server';
-import { captureEvent } from './posthog';
 import { runWithRequestContext } from './requestContext';
-
-interface ApiHandlerConfig {
-    /**
-     * Whether to track this API request in PostHog.
-     * @default true
-     */
-    track?: boolean;
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyHandler = (...args: any[]) => Promise<Response> | Response;
 
 /**
- * Creates an API route handler with automatic request tracking.
+ * Creates an API route handler that runs inside a request context, so that
+ * `getCurrentRequest()` resolves to the incoming request.
  *
  * @example
  * // Simple handler
@@ -28,33 +20,10 @@ type AnyHandler = (...args: any[]) => Promise<Response> | Response;
  *     const { id } = await params;
  *     return Response.json({ id });
  * });
- *
- * @example
- * // Disable tracking (for health checks, etc.)
- * export const GET = apiHandler(async () => {
- *     return Response.json({ status: 'ok' });
- * }, { track: false });
  */
-export function apiHandler<H extends AnyHandler>(
-    handler: H,
-    config: ApiHandlerConfig = {}
-): H {
-    const { track = true } = config;
-
+export function apiHandler<H extends AnyHandler>(handler: H): H {
     const wrappedHandler = async (request: NextRequest, ...rest: unknown[]) =>
-        runWithRequestContext(request, async () => {
-            if (track) {
-                const path = request.nextUrl.pathname;
-                const method = request.method;
-                const source = request.headers.get('X-Sourcebot-Client-Source') ?? 'unknown';
-
-                // Fire and forget - don't await to avoid blocking the request
-                captureEvent('api_request', { path, method, source });
-            }
-
-            // Call the original handler with all arguments
-            return handler(request, ...rest);
-        });
+        runWithRequestContext(request, async () => handler(request, ...rest));
 
     return wrappedHandler as H;
 }

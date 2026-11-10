@@ -5,22 +5,7 @@ export interface AzureDevOpsConnectionConfig {
    * Azure DevOps Configuration
    */
   type: "azuredevops";
-  /**
-   * A Personal Access Token (PAT).
-   */
-  token:
-    | {
-        /**
-         * The name of the environment variable that contains the token.
-         */
-        env: string;
-      }
-    | {
-        /**
-         * The resource name of a Google Cloud secret. Must be in the format `projects/<project-id>/secrets/<secret-name>/versions/<version-id>`. See https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets
-         */
-        googleCloudSecret: string;
-      };
+  token: Token;
   /**
    * The URL of the Azure DevOps host. For Azure DevOps Cloud, use https://dev.azure.com. For Azure DevOps Server, use your server URL.
    */
@@ -73,14 +58,15 @@ export interface AzureDevOpsConnectionConfig {
     };
   };
   revisions?: GitRevisions;
+}
+/**
+ * A Personal Access Token (PAT).
+ */
+export interface Token {
   /**
-   * Controls whether repository permissions are enforced for this connection. When `PERMISSION_SYNC_ENABLED` is false, this setting has no effect. Defaults to the value of `PERMISSION_SYNC_ENABLED`. See https://docs.sourcebot.dev/docs/features/permission-syncing
+   * The name of the environment variable that contains the token.
    */
-  enforcePermissions?: boolean;
-  /**
-   * Controls whether repository permissions are enforced for public repositories in this connection. When true, public repositories are only visible to users with a linked account for this connection's code host. When false, public repositories are visible to all users. Has no effect when enforcePermissions is false. Defaults to false. See https://docs.sourcebot.dev/docs/features/permission-syncing
-   */
-  enforcePermissionsForPublicRepos?: boolean;
+  env: string;
 }
 /**
  * The revisions (branches, tags) that should be included when indexing. The default branch (HEAD) is always indexed. A maximum of 64 revisions can be indexed, with any additional revisions being ignored.

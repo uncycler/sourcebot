@@ -6,36 +6,26 @@ import { OnboardGuard } from "./components/onboardGuard";
 import { cookies, headers } from "next/headers";
 import { getSelectorsByUserAgent } from "react-device-detect";
 import { MobileUnsupportedSplashScreen } from "./components/mobileUnsupportedSplashScreen";
-import { MOBILE_UNSUPPORTED_SPLASH_SCREEN_DISMISSED_COOKIE_NAME, OPTIONAL_PROVIDERS_LINK_SKIPPED_COOKIE_NAME } from "@/lib/constants";
+import { MOBILE_UNSUPPORTED_SPLASH_SCREEN_DISMISSED_COOKIE_NAME } from "@/lib/constants";
 import { SyntaxReferenceGuide } from "./components/syntaxReferenceGuide";
 import { SyntaxGuideProvider } from "./components/syntaxGuideProvider";
 import { notFound, redirect } from "next/navigation";
 import { PendingApprovalCard } from "../../features/membership/components/pendingApprovalCard";
 import { SubmitJoinRequestCard } from "../../features/membership/components/submitJoinRequestCard";
-import { NotProvisionedCard } from "@/features/membership/components/notProvisionedCard";
-import { isScimEnabled } from "@/features/scim/utils";
-import { env, getOfflineLicenseMetadata, SOURCEBOT_VERSION, isMemberApprovalRequired } from "@sourcebot/shared";
-import { hasEntitlement, isAnonymousAccessEnabled } from "@/lib/entitlements";
-import { GcpIapAuth } from "./components/gcpIapAuth";
+import { isMemberApprovalRequired } from "@sourcebot/shared";
+import { isAnonymousAccessEnabled } from "@/lib/anonymousAccess";
 import { JoinOrganizationCard } from "@/features/membership/components/joinOrganizationCard";
-import { LogoutEscapeHatch } from "@/app/components/logoutEscapeHatch";
 import { GitHubStarToast } from "./components/githubStarToast";
-import { getLinkedAccounts } from "@/ee/features/sso/actions";
 import { BannerSlot } from "./components/banners/bannerSlot";
 import { BannerHeightObserver } from "./components/banners/bannerHeightObserver";
 import { activeOrPendingMembershipWhere } from "@/features/membership/utils";
-import { getPermissionSyncStatus } from "../api/(server)/ee/permissionSyncStatus/api";
 import { OrgRole } from "@sourcebot/db";
 import { ServiceErrorException } from "@/lib/serviceError";
-import { ConnectAccountsCard } from "@/ee/features/sso/components/connectAccountsCard";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { CheckoutReturnHandler } from "@/features/billing/checkoutReturnHandler";
 import { RoleProvider } from "@/features/auth/roleProvider";
-import { HasLicenseProvider } from "@/features/billing/hasLicenseProvider";
-import { tryGetLatestSourcebotTag } from "./components/banners/actions";
-import { LanguageModelProvider } from "@/features/chat/languageModelContext";
-import { getConfiguredLanguageModelsInfo } from "@/features/chat/utils.server";
 import { NavigationGuardProvider } from "next-navigation-guard";
+import { getRepositorySyncCounts } from "@/features/repos/repositorySyncCounts.server";
+import { getConnectionSyncCounts } from "@/features/connections/connectionSyncCounts.server";
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -76,15 +66,10 @@ export default async function Layout(props: LayoutProps) {
             }
         });
 
-        // There's two reasons why a user might not be a member of an org:
-        // 1. The org doesn't require member approval, but the org was at max capacity when the user registered. In this case, we show them
-        // the join organization card to allow them to join the org if seat capacity is freed up. This card handles checking if the org has available seats.
+        // A signed-in user might not be a member of the org yet:
+        // 1. The org doesn't require member approval. In this case, we show them the join organization card.
         // 2. The org requires member approval, and they haven't been approved yet. In this case, we allow them to submit a request to join the org.
         if (!membership) {
-            if (await isScimEnabled(org)) {
-                return <NotProvisionedCard />;
-            }
-
             if (!isMemberApprovalRequired(org)) {
                 return <JoinOrganizationCard />;
             }
@@ -107,46 +92,17 @@ export default async function Layout(props: LayoutProps) {
     } else {
         // If the user isn't authenticated and anonymous access isn't enabled, we need to redirect them to the login page.
         if (!anonymousAccessEnabled) {
-            const ssoEntitlement = await hasEntitlement("sso");
-            if (ssoEntitlement && env.AUTH_EE_GCP_IAP_ENABLED && env.AUTH_EE_GCP_IAP_AUDIENCE) {
-                return <GcpIapAuth callbackUrl="/" />;
-            } else {
-                redirect('/login');
-            }
+            redirect('/login');
         }
     }
 
-    // If the org is not onboarded, and GCP IAP is not enabled, show the onboarding page
-    if (!org.isOnboarded && !(env.AUTH_EE_GCP_IAP_ENABLED && env.AUTH_EE_GCP_IAP_AUDIENCE)) {
+    // If the org is not onboarded, show the onboarding page
+    if (!org.isOnboarded) {
         return (
             <OnboardGuard>
                 {children}
             </OnboardGuard>
         )
-    }
-
-    if (session && await hasEntitlement("sso")) {
-        const linkedAccounts = await getLinkedAccounts();
-        if (isServiceError(linkedAccounts)) {
-            throw new ServiceErrorException(linkedAccounts);
-        }
-
-        // First, grab a list of all unlinked providers.
-        const unlinkedProviders = linkedAccounts.filter(a => !a.isLinked && a.isAccountLinkingProvider);
-        if (unlinkedProviders.length > 0) {
-            const cookieStore = await cookies();
-            const hasSkippedOptional = cookieStore.has(OPTIONAL_PROVIDERS_LINK_SKIPPED_COOKIE_NAME);
-
-            const hasRequiredUnlinkedProviders = unlinkedProviders.some(a => a.required);
-            if (hasRequiredUnlinkedProviders || !hasSkippedOptional) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center p-6">
-                        <LogoutEscapeHatch className="absolute top-0 right-0 p-6" />
-                        <ConnectAccountsCard linkedAccounts={linkedAccounts} callbackUrl="/" />
-                    </div>
-                )
-            }
-        }
     }
 
     const headersList = await headers();
@@ -159,68 +115,63 @@ export default async function Layout(props: LayoutProps) {
             <MobileUnsupportedSplashScreen />
         )
     }
-    const hasPermissionSyncEntitlement = !!session && await hasEntitlement("permission-syncing");
-    const permissionSyncStatus = hasPermissionSyncEntitlement ? await getPermissionSyncStatus() : null;
-    const hasPendingFirstSync =
-        permissionSyncStatus !== null && !isServiceError(permissionSyncStatus)
-            ? permissionSyncStatus.hasPendingFirstSync
-            : false;
-    const permissionSyncIssues =
-        permissionSyncStatus !== null && !isServiceError(permissionSyncStatus)
-            ? permissionSyncStatus.issues
-            : [];
-
-    const offlineLicense = getOfflineLicenseMetadata();
-    const license = offlineLicense
-        ? null
-        : await __unsafePrisma.license.findUnique({ where: { orgId: org.id } });
-
-    const latestVersion = await tryGetLatestSourcebotTag({
-        timeoutMs: 3000
-    });
-
-    const languageModels = await getConfiguredLanguageModelsInfo();
+    const repositorySyncCountsResult = role === OrgRole.OWNER
+        ? await getRepositorySyncCounts().catch((error) => {
+              console.error("Failed to load repository sync counts", error);
+              return {
+                  firstTimeSyncingCount: 0,
+                  failedCount: 0,
+                  warningCount: 0,
+              };
+          })
+        : { firstTimeSyncingCount: 0, failedCount: 0, warningCount: 0 };
+    if (isServiceError(repositorySyncCountsResult)) {
+        throw new ServiceErrorException(repositorySyncCountsResult);
+    }
+    const repositorySyncCounts = repositorySyncCountsResult;
+    const connectionSyncCountsResult = role === OrgRole.OWNER
+        ? await getConnectionSyncCounts().catch((error) => {
+              console.error("Failed to load connection sync counts", error);
+              return {
+                  firstTimeSyncingCount: 0,
+                  failedCount: 0,
+                  warningCount: 0,
+              };
+          })
+        : { firstTimeSyncingCount: 0, failedCount: 0, warningCount: 0 };
+    if (isServiceError(connectionSyncCountsResult)) {
+        throw new ServiceErrorException(connectionSyncCountsResult);
+    }
+    const connectionSyncCounts = connectionSyncCountsResult;
 
     return (
         <RoleProvider role={role}>
-            <HasLicenseProvider
-                hasLicense={offlineLicense !== null || license !== null}
-            >
-                <LanguageModelProvider languageModels={languageModels}>
-                    <SyntaxGuideProvider>
-                        {/* Keep one guard provider above both sidebar and content so browser history is tracked before guarded routes mount. */}
-                        <NavigationGuardProvider>
-                            <div className="fixed inset-0 flex bg-shell">
-                                <SidebarProvider defaultOpen={cookieStore.get("sidebar_state")?.value !== "false"}>
-                                    {sidebar}
-                                    <div className="flex-1 min-h-0 min-w-0 flex flex-col pt-2 pb-2 pr-2 pl-2 md:pl-0">
-                                        <div className="flex-1 min-h-0 bg-background flex flex-col border border-[#e6e6e6] dark:border-[#1d1d1f] rounded-xl overflow-hidden">
-                                            <BannerHeightObserver>
-                                                <BannerSlot
-                                                    role={role}
-                                                    license={license}
-                                                    offlineLicense={offlineLicense}
-                                                    hasPermissionSyncEntitlement={hasPermissionSyncEntitlement}
-                                                    hasPendingFirstSync={hasPendingFirstSync}
-                                                    permissionSyncIssues={permissionSyncIssues}
-                                                    currentVersion={SOURCEBOT_VERSION}
-                                                    latestVersion={latestVersion}
-                                                />
-                                            </BannerHeightObserver>
-                                            <div className="flex-1 min-h-0 overflow-y-scroll [scrollbar-gutter:stable]">
-                                                {children}
-                                            </div>
-                                        </div>
+            <SyntaxGuideProvider>
+                {/* Keep one guard provider above both sidebar and content so browser history is tracked before guarded routes mount. */}
+                <NavigationGuardProvider>
+                    <div className="fixed inset-0 flex bg-shell">
+                        <SidebarProvider defaultOpen={cookieStore.get("sidebar_state")?.value !== "false"}>
+                            {sidebar}
+                            <div className="flex-1 min-h-0 min-w-0 flex flex-col pt-2 pb-2 pr-2 pl-2 md:pl-0">
+                                <div className="flex-1 min-h-0 bg-background flex flex-col border border-[#e6e6e6] dark:border-[#1d1d1f] rounded-xl overflow-hidden">
+                                    <BannerHeightObserver>
+                                        <BannerSlot
+                                            role={role}
+                                            connectionSyncCounts={connectionSyncCounts}
+                                            repositorySyncCounts={repositorySyncCounts}
+                                        />
+                                    </BannerHeightObserver>
+                                    <div className="flex-1 min-h-0 overflow-y-scroll [scrollbar-gutter:stable]">
+                                        {children}
                                     </div>
-                                </SidebarProvider>
+                                </div>
                             </div>
-                            <SyntaxReferenceGuide />
-                            <GitHubStarToast />
-                            <CheckoutReturnHandler />
-                        </NavigationGuardProvider>
-                    </SyntaxGuideProvider>
-                </LanguageModelProvider>
-            </HasLicenseProvider>
+                        </SidebarProvider>
+                    </div>
+                    <SyntaxReferenceGuide />
+                    <GitHubStarToast />
+                </NavigationGuardProvider>
+            </SyntaxGuideProvider>
         </RoleProvider>
     )
 }

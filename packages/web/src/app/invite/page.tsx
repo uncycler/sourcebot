@@ -6,8 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SourcebotLogo } from "@/app/components/sourcebotLogo";
 import { AuthMethodSelector } from "@/app/components/authMethodSelector";
 import { JoinOrganizationCard } from "@/features/membership/components/joinOrganizationCard";
-import { NotProvisionedCard } from "@/features/membership/components/notProvisionedCard";
-import { isScimEnabled } from "@/features/scim/utils";
 import { activeOrPendingMembershipWhere } from "@/features/membership/utils";
 
 interface InvitePageProps {
@@ -48,10 +46,6 @@ export default async function InvitePage(props: InvitePageProps) {
         redirect(`/`);
     }
 
-    if (await isScimEnabled(org)) {
-        return <NotProvisionedCard />;
-    }
-
     // User is logged in but not a member, show join invitation
     return (
         <JoinOrganizationCard inviteLinkId={inviteLinkId} />
@@ -78,7 +72,6 @@ function WelcomeCard({ inviteLinkId }: { inviteLinkId: string; }) {
                     <AuthMethodSelector
                         callbackUrl={`/invite?id=${inviteLinkId}`}
                         context="signup"
-                        securityNoticeClosable={true}
                     />
                 </CardContent>
             </Card>

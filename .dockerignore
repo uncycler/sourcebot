@@ -9,7 +9,5 @@ packages/web/.next
 !packages/web/.next/standalone
 **/node_modules
 **/.env.local
-**/.sentryclirc
-**/.env.sentry-build-plugin
 .yarn
 !.yarn/releases

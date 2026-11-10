@@ -1,6 +1,6 @@
 services:
   sourcebot:
-    image: docker.sourcebot.dev/sourcebot-dev/sourcebot:latest
+    image: docker.sourcebot.dev/sourcebot-dev/sourcebot:latest@sha256:43da94f12e14817192fed3d33ad82916a59c93fa42afa10c1f30a86526d998d5
     pull_policy: always
     user: sourcebot
     restart: always
